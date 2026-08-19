@@ -268,11 +268,9 @@ function draw(d,R,U,s,shift){
   g.clearRect(0,0,w,h);
 
   const L=46,Rm=12,T=12,B=26, pw=w-L-Rm, ph=h-T-B;
-  const step=Math.max(1,Math.floor(N/pw));
-  let lo=1e9,hi=-1e9;
-  for(let a=0;a<ASSETS;a+=3) for(let i=0;i<N;i+=step*4){ if(R[a][i]<lo)lo=R[a][i]; if(R[a][i]>hi)hi=R[a][i]; }
-  const pad=(hi-lo)*0.1||1; lo-=pad; hi+=pad;
-  const x=i=>L+pw*i/N, yv=v=>T+ph*(1-(v-lo)/(hi-lo));
+  let lo, hi;
+  const x=i=>L+pw*i/N;
+  const yv2=v=>T+ph*(1-(v-lo)/(hi-lo));
 
   g.strokeStyle='#e6e1da'; g.lineWidth=1;
   for(let k=0;k<=4;k++){ const yy=T+ph*k/4; g.beginPath(); g.moveTo(L,yy); g.lineTo(L+pw,yy); g.stroke(); }
@@ -281,22 +279,40 @@ function draw(d,R,U,s,shift){
   g.textAlign='center';
   for(let dday=0;dday<=DAYS;dday+=50) g.fillText('d'+dday, x(dday*HPD), h-8);
 
-  g.globalAlpha=0.5; g.lineWidth=1;
+  // daily means: hourly traces are unreadable over 300 days
+  const D = DAYS;
+  const dayMean = (arr) => { const o=new Float64Array(D);
+    for(let d=0;d<D;d++){ let s2=0; for(let k=0;k<HPD;k++) s2+=arr[d*HPD+k]; o[d]=s2/HPD; } return o; };
+  const xd = d => L + pw*d/D;
+
+  lo=1e9; hi=-1e9;
+  const daily=[];
+  for(let a=0;a<ASSETS;a++){ const dm=dayMean(R[a]); daily.push(dm);
+    for(let d=0;d<D;d++){ if(dm[d]<lo)lo=dm[d]; if(dm[d]>hi)hi=dm[d]; } }
+  const pad2=(hi-lo)*0.12||1; lo-=pad2; hi+=pad2;
+
+  g.clearRect(0,0,w,h);
+  g.strokeStyle='#e6e1da'; g.lineWidth=1;
+  for(let k=0;k<=4;k++){ const yy2=T+ph*k/4; g.beginPath(); g.moveTo(L,yy2); g.lineTo(L+pw,yy2); g.stroke(); }
+  g.fillStyle='#767d86'; g.font='11px DM Mono, monospace'; g.textAlign='right';
+  for(let k=0;k<=4;k++){ const v=hi-(hi-lo)*k/4; g.fillText(v.toFixed(1),L-6,T+ph*k/4+4); }
+  g.textAlign='center';
+  for(let dday=0;dday<=DAYS;dday+=50) g.fillText('d'+dday, xd(dday), h-8);
+
+  g.lineWidth=1.1;
   for(let a=0;a<ASSETS;a++){
-    g.strokeStyle = d.faulty[a] ? 'rgba(162,59,40,.55)' : 'rgba(18,89,90,.30)';
+    g.strokeStyle = d.faulty[a] ? 'rgba(162,59,40,.60)' : 'rgba(18,89,90,.28)';
     g.beginPath();
-    for(let i=0;i<N;i+=step){ const px=x(i), py=yv(R[a][i]); i?g.lineTo(px,py):g.moveTo(px,py); }
+    for(let dd=0;dd<D;dd++){ const px=xd(dd), py=yv2(daily[a][dd]); dd?g.lineTo(px,py):g.moveTo(px,py); }
     g.stroke();
   }
-  g.globalAlpha=1;
 
-  let umax=0; for(let i=0;i<N;i+=step) for(let a=0;a<ASSETS;a+=5) if(U[a][i]>umax) umax=U[a][i];
-  g.strokeStyle='#b07d29'; g.lineWidth=1.4; g.beginPath();
-  for(let i=0;i<N;i+=step){
-    let m=0; for(let a=0;a<ASSETS;a++) m+=U[a][i]; m/=ASSETS;
-    const py=T+ph*(1-m/(umax||1))*0.28+ph*0.72;
-    i?g.lineTo(x(i),py):g.moveTo(x(i),py);
-  }
+  const um=dayMean((()=>{ const m=new Float64Array(N);
+    for(let i=0;i<N;i++){ let s3=0; for(let a=0;a<ASSETS;a++) s3+=U[a][i]; m[i]=s3/ASSETS; } return m; })());
+  let umax=0; for(let dd=0;dd<D;dd++) if(um[dd]>umax) umax=um[dd];
+  g.strokeStyle='#b07d29'; g.lineWidth=1.6; g.beginPath();
+  for(let dd=0;dd<D;dd++){ const py=T+ph*0.72+ph*(1-um[dd]/(umax||1))*0.26;
+    dd?g.lineTo(xd(dd),py):g.moveTo(xd(dd),py); }
   g.stroke();
 
   if(shift){ g.strokeStyle='#3c434c'; g.setLineDash([5,4]); g.lineWidth=1.2;

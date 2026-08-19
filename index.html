@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alarm quality under regime change</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#14171c; --ink-2:#3c434c; --ink-3:#767d86; --accent:#12595a; --accent-2:#8a4b2a;
+  --rule:#ddd8d1; --paper:#faf8f5; --panel:#fff; --good:#2f6f4f; --bad:#a23b28; --warn:#b07d29;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:'DM Sans',system-ui,sans-serif;font-size:16px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px 90px}
+h1,h2,h3{font-family:'Barlow Condensed','DM Sans',sans-serif;margin:0}
+h1{font-size:40px;font-weight:700;line-height:1.02;letter-spacing:.005em;text-transform:uppercase}
+h2{font-size:15px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  border-bottom:1px solid var(--rule);padding-bottom:7px;margin:52px 0 18px}
+h3{font-size:19px;font-weight:600;margin:22px 0 6px}
+p{margin:0 0 12px;max-width:74ch}
+a{color:var(--accent)}
+code,.mono{font-family:'DM Mono',ui-monospace,monospace;font-size:.9em}
+header{padding:44px 0 8px}
+.kicker{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:9px}
+.sub{font-size:18px;color:var(--ink-2);max-width:76ch;margin-top:14px}
+.byline{font-size:14px;color:var(--ink-3);margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
+.finding{background:var(--panel);border:1px solid var(--rule);border-left:4px solid var(--accent);
+  padding:20px 24px;margin:26px 0}
+.finding .lead{font-size:19px;font-weight:500;line-height:1.42;margin:0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:14px 0}
+th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+th{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;border-bottom:1.5px solid var(--ink-3)}
+tbody tr:hover{background:#f2efe9}
+tr.hl td{background:#eef4f2;font-weight:600}
+td.good{color:var(--good)} td.bad{color:var(--bad)}
+.panel{background:var(--panel);border:1px solid var(--rule);padding:22px;margin:18px 0}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px 22px;align-items:start}
+label.ctl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+select,input[type=range]{width:100%}
+select{padding:7px;border:1px solid var(--rule);background:#fff;font-family:inherit;font-size:14px;color:var(--ink)}
+.val{font-family:'DM Mono',monospace;font-size:13px;color:var(--accent);float:right}
+button{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  font-size:15px;background:var(--accent);color:#fff;border:0;padding:11px 26px;cursor:pointer}
+button:hover{background:#0e4647}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button.ghost:hover{background:#eef4f2}
+canvas{width:100%;display:block;background:#fff;border:1px solid var(--rule)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
+.metric{background:#f4f1ec;border:1px solid var(--rule);padding:12px 14px}
+.metric .k{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  font-family:'Barlow Condensed',sans-serif;font-weight:600}
+.metric .v{font-family:'DM Mono',monospace;font-size:23px;font-weight:500;margin-top:3px}
+.note{font-size:14px;color:var(--ink-3);max-width:76ch}
+ul{max-width:74ch;padding-left:20px}
+li{margin-bottom:7px}
+.refs{font-size:14px;color:var(--ink-2)}
+.refs li{margin-bottom:10px}
+.tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  font-family:'Barlow Condensed',sans-serif;font-weight:600;padding:2px 7px;border:1px solid var(--rule);
+  color:var(--ink-3);margin-left:6px;vertical-align:2px}
+.tag.own{color:var(--accent);border-color:var(--accent)}
+.legend{font-size:13px;color:var(--ink-3);margin-top:7px}
+.sw{display:inline-block;width:11px;height:11px;vertical-align:-1px;margin-right:4px;border-radius:2px}
+footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--rule);font-size:14px;color:var(--ink-3)}
+@media(max-width:640px){h1{font-size:30px}.wrap{padding:0 16px 60px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Energy informatics &middot; a study built around job 4159</div>
+  <h1>When the world moves,<br>a good detector starts lying</h1>
+  <p class="sub">A fault detector was fitted on a healthy distribution grid. Then the operating
+  regime changed: more load, warmer weather. Its detection rate stayed at 100% and its detection
+  delay fell to zero. It also became almost entirely useless. This page simulates two energy
+  systems, reproduces that result, and tests what actually fixes it.</p>
+  <div class="byline">Bolga&ccedil; G&uuml;len &middot; Odense &middot; built August 2026 for the PhD position in
+  Energy Informatics, Theme&nbsp;2, predictive maintenance and asset management of smart energy
+  networks. Everything below runs in this page: no server, no libraries.</div>
+</header>
+
+<div class="finding">
+  <p class="lead">Under a regime change, the baseline detector reported <strong>100% detection with
+  zero delay</strong> while <strong>99% of the tickets it raised were on healthy assets</strong>.
+  Uncertainty gating cut the nuisance load fivefold but pushed median detection out to 80 days.
+  Only recalibration recovered precision, and it cost more than half the detections.
+  There is no configuration here that is simply better. That is the finding.</p>
+</div>
+
+<h2>The comparison</h2>
+
+<p>Five detector configurations, one fleet of 120 distribution transformers over 300 days, 25% of
+which develop a slow thermal fault. Averaged over five seeds. The left block is a stationary world;
+the right block is the same world with a step change in load and ambient temperature at day 165,
+after the model was fitted.</p>
+
+<table id="exec">
+  <thead>
+    <tr><th>Detector configuration</th>
+      <th>Tickets<br>/asset&middot;month</th><th>Detection<br>rate</th><th>Median<br>delay (d)</th><th>Precision</th>
+      <th>Tickets<br>/asset&middot;month</th><th>Detection<br>rate</th><th>Median<br>delay (d)</th><th>Precision</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<p class="note">Left four columns: stationary. Right four: after the regime change. A ticket is one
+operator-facing alarm event, with a seven-day refractory period per asset so that one developing
+fault is one ticket rather than a thousand. Precision is the share of tickets raised on genuinely
+faulty assets.</p>
+
+<h2>Run it yourself</h2>
+
+<div class="panel">
+  <div class="controls">
+    <div>
+      <label class="ctl">System</label>
+      <select id="sys">
+        <option value="tx">Distribution transformers, thermal degradation</option>
+        <option value="dh">District heating substations, exchanger fouling</option>
+      </select>
+    </div>
+    <div>
+      <label class="ctl">Detector</label>
+      <select id="cfg">
+        <option value="single">Single threshold</option>
+        <option value="vote">Multi-method vote</option>
+        <option value="votep">Vote + persistence</option>
+        <option value="voteu">Vote + uncertainty</option>
+        <option value="gate" selected>Full sequential gate</option>
+        <option value="recal">Gate + recalibration</option>
+      </select>
+    </div>
+    <div>
+      <label class="ctl">Regime change <span class="val" id="shiftv">on</span></label>
+      <select id="shift"><option value="1" selected>On, at day 165</option><option value="0">Off</option></select>
+    </div>
+    <div>
+      <label class="ctl">Fault severity <span class="val" id="sevv">1.00&times;</span></label>
+      <input type="range" id="sev" min="0.4" max="2.2" step="0.1" value="1">
+    </div>
+    <div>
+      <label class="ctl">Sensor noise <span class="val" id="noisev">1.00&times;</span></label>
+      <input type="range" id="noise" min="0.3" max="2.5" step="0.1" value="1">
+    </div>
+    <div style="align-self:end">
+      <button id="run">Run simulation</button>
+    </div>
+  </div>
+
+  <div class="metrics" id="mx"></div>
+  <canvas id="cv" height="300"></canvas>
+  <div class="legend">
+    <span class="sw" style="background:#12595a"></span>residual, healthy assets
+    <span class="sw" style="background:#a23b28;margin-left:14px"></span>residual, faulty assets
+    <span class="sw" style="background:#b07d29;margin-left:14px"></span>ensemble disagreement
+    &nbsp;&middot;&nbsp; vertical marks are tickets, the dashed line is the regime change
+  </div>
+</div>
+
+<h2>The second system, where it does not work</h2>
+
+<p>The same stack, unchanged, on a fleet of district heating substations losing heat-exchanger
+effectiveness. It goes considerably worse, and the failure is more interesting than the success.</p>
+
+<table>
+  <thead><tr><th>Detector configuration</th>
+    <th>Tickets<br>/asset&middot;month</th><th>Detection<br>rate</th><th>Median<br>delay (d)</th><th>Precision</th></tr></thead>
+  <tbody>
+    <tr><td>Single threshold</td><td>1.90</td><td>49%</td><td>4.5</td><td class="bad">1%</td></tr>
+    <tr><td>Multi-method vote</td><td>1.47</td><td>42%</td><td>8.5</td><td class="bad">1%</td></tr>
+    <tr><td>Vote + uncertainty</td><td>0.90</td><td>41%</td><td>42.8</td><td class="bad">2%</td></tr>
+    <tr><td>Full sequential gate</td><td>0.59</td><td>35%</td><td>45.5</td><td class="bad">2%</td></tr>
+    <tr><td>Gate + recalibration</td><td>0.56</td><td>40%</td><td>22.9</td><td class="bad">2%</td></tr>
+  </tbody>
+</table>
+
+<p>Precision never recovers. Two reasons, and neither is a tuning problem.</p>
+
+<p>First, the heating fleet is <strong>seasonally non-stationary by construction</strong>. Return
+temperature depends on weather through both demand and the weather-compensated supply curve, so a
+model fitted on ninety winter days is extrapolating by spring. The residual drifts for reasons that
+have nothing to do with any fault, and no threshold placed on that residual can tell the difference.</p>
+
+<p>Second, and worse, <strong>the drift monitor does not fire</strong> on this system. The regime
+change moves supply temperature and demand, but both stay inside the range the ensemble was fitted
+over, so the models continue to agree with each other while being jointly wrong. Ensemble
+disagreement detects <em>novelty</em>, not <em>error</em>, and those come apart exactly when the
+change is a shift along a direction the training data already covered. On this fleet the
+recalibration arm therefore never triggers, which is why its row is barely distinguishable from the
+plain gate.</p>
+
+<p>The honest conclusion is that a monitoring architecture is not portable between two asset classes
+inside the same utility, even when the detector, the gates and the calibration procedure are
+identical. What transfers is the method; what does not transfer is the assumption that the healthy
+window represents the operating envelope. Deciding that in advance, per asset class, looks to me
+like the actual engineering problem, and it is the part I would want to work on.</p>
+
+<h2>What the gate actually does</h2>
+
+<p>The stack mirrors how this centre's own published pipelines are put together, at a scale that
+fits in a browser.</p>
+
+<ul>
+  <li><strong>An ensemble learns healthy behaviour.</strong> Eight bootstrapped quadratic ridge
+  models predict the observable, transformer top-oil temperature rise or substation return
+  temperature, from load and weather. Their <em>mean</em> is the expectation; their
+  <em>disagreement</em> is the epistemic uncertainty. This stands in for MC dropout over several
+  architectures, which is the heavier version used in the literature below.</li>
+  <li><strong>Three statistics watch the residual.</strong> A standardised residual, an EWMA, and a
+  one-sided CUSUM. Thresholds are not hand-tuned: each is set from the healthy window so that all
+  three fire at the same small rate, which is what makes the two systems comparable.</li>
+  <li><strong>Gate 1, vote.</strong> At least two of the three statistics must agree.</li>
+  <li><strong>Gate 2, uncertainty.</strong> The alarm is suppressed while ensemble disagreement sits
+  in the top 2% of what was seen during training. The detector abstains rather than guesses.</li>
+  <li><strong>Gate 3, persistence.</strong> The vote must hold for six consecutive hours.</li>
+  <li><strong>Recalibration.</strong> A separate drift monitor watches fleet-average disagreement.
+  When it stays elevated for three days, the world is declared to have moved: the ensemble is refit
+  on a fresh healthy window and the statistics reset. The detector is deliberately blind while this
+  happens, and that blindness is counted against it in the table above.</li>
+</ul>
+
+<h2>What I take from it</h2>
+
+<p>Three things, none of them comfortable.</p>
+
+<p><strong>Detection rate is the wrong headline number.</strong> In the shifted world the naive
+detector scores perfectly on detection and delay, because it is alarming on everything. Precision is
+the column that exposes it, and precision is the column an operator feels. A monitoring system
+evaluated on recall alone will be optimised straight into being ignored.</p>
+
+<p><strong>Abstention buys honesty, not performance.</strong> Gating on uncertainty does exactly
+what it should: the model stops asserting things it cannot support. But on its own it is a delay
+machine, pushing median detection from days to weeks, which for a fault that develops over a month
+means catching it after it has arrived. Abstention is a way to stay truthful while something else
+fixes the problem, not the fix itself.</p>
+
+<p><strong>The fix is a lifecycle action, not a better statistic.</strong> Precision only recovers
+when the system notices the regime changed and refits. That is an operational capability, not a
+model property, and it is the part that a paper about detection accuracy will never measure.</p>
+
+<h2>Where this came from</h2>
+
+<p>The design of the stack, and the metrics used to score it, are taken from the SDU Center for
+Energy Informatics and from the literature it builds on. I have marked the centre's own work.</p>
+
+<h3>The methods</h3>
+<ul class="refs">
+  <li>S&oslash;ndergaard, H.A.N., Shaker, H.R., J&oslash;rgensen, B.N. (2026). Multi-method fault
+  detection considering uncertainty through MC dropout for enhanced voting. <em>Energy and
+  Buildings</em>, 356, 117082. <span class="tag own">centre</span><br>
+  The source of the shape of this pipeline: several models, uncertainty carried through inference,
+  and a vote that weights each contribution by its inverse variance rather than treating all votes
+  as equal. My three-statistic vote with an uncertainty veto is the small version of it.</li>
+
+  <li>Ma, Z.G., Cong, L., J&oslash;rgensen, B.N. (2026). Deployment feasibility as a layered
+  construct: a sequential gate framework for evaluating battery dispatch strategies in distribution
+  grids. <em>Energies</em>, 19(10), 2424. <span class="tag own">centre</span><br>
+  The reason this page compares architectures rather than thresholds. That paper shows that whether
+  criteria are applied flat or as a sequence of non-compensable gates changes the recommendation on
+  identical data. This page asks the same question of alarm logic.</li>
+
+  <li>Shadi, M.R., Mirshekali, H., Tahavori, M., Shaker, H.R. (2026). Survival models for predictive
+  maintenance and remaining useful life in sensor-enabled smart energy networks: a review.
+  <em>Sensors</em>, 26(6), 1915. <span class="tag own">centre</span><br>
+  Where the fault model comes from: degradation as a hazard that rises with age and stress, and the
+  warning that a young fleet may never observe its own wear-out phase.</li>
+
+  <li>Shadi, M.R., Mirshekali, H., Shaker, H.R. (2025). Explainable artificial intelligence for
+  energy systems maintenance. <em>Renewable and Sustainable Energy Reviews</em>, 216, 115668.
+  <span class="tag own">centre</span><br>
+  The argument that maintenance AI has to be scored on what it costs an operator to act on, not on
+  classification accuracy. The ticket-and-precision framing here follows from it.</li>
+
+  <li>Mirshekali, H., Ghanadi Ladani, F., Shaker, H.R. (2025). Consequence-aware prescriptive
+  maintenance with Transformer-KAN forecasting and PPO-controlled grid reconfiguration. <em>IEEE
+  Transactions on Smart Grid</em>, 16(5), 4237&ndash;4251. <span class="tag own">centre</span><br>
+  Alarms weighted by how many consumers sit behind them. Not implemented here, and the obvious next
+  thing to add: my tickets are currently all worth the same, which is the least realistic
+  assumption on this page.</li>
+
+  <li>V&aelig;rbak, M., Billanes, J.D., J&oslash;rgensen, B.N., Ma, Z.G. (2024). A digital twin
+  framework for simulating distributed energy resources in distribution grids. <em>Energies</em>,
+  17(11), 2503. <span class="tag own">centre</span><br>
+  Where the simulated fleet gets its shape: real Danish residential feeders, a 400 kVA transformer
+  per district, and the finding that electric vehicle charging, not solar, is what eventually
+  overloads them.</li>
+</ul>
+
+<h3>The literature underneath it</h3>
+<ul class="refs">
+  <li>Gal, Y., Ghahramani, Z. (2016). Dropout as a Bayesian approximation: representing model
+  uncertainty in deep learning. arXiv:1506.02142. The origin of treating disagreement as epistemic
+  uncertainty. A bootstrapped ensemble is the cruder, cheaper cousin used here.</li>
+  <li>Page, E.S. (1954). Continuous inspection schemes. <em>Biometrika</em>, 41, 100&ndash;115. The
+  CUSUM statistic, one of the three voters.</li>
+  <li>Roberts, S.W. (1959). Control chart tests based on geometric moving averages.
+  <em>Technometrics</em>, 1, 239&ndash;250. The EWMA, the second voter.</li>
+  <li>Kaplan, E.L., Meier, P. (1958). Nonparametric estimation from incomplete observations.
+  <em>Journal of the American Statistical Association</em>, 53, 457&ndash;481. Censoring, and why a
+  fleet that has not failed yet still carries information.</li>
+  <li>Lundberg, S.M., Lee, S.-I. (2017). A unified approach to interpreting model predictions.
+  <em>NeurIPS</em> 30. The attribution machinery the centre's explainability review evaluates.</li>
+  <li>Endsley, M.R. (2017). From here to autonomy: lessons learned from human-automation research.
+  <em>Human Factors</em>, 59, 5&ndash;27. Why an alarm that a human cannot act on is not a
+  detection.</li>
+</ul>
+
+<h2>What this is not</h2>
+<p>A simulation, and a small one. The systems are plausible rather than validated: a first-order
+thermal lag for transformers, an effectiveness decay for heat exchangers, no network topology, no
+real measurements, no consumer weighting on alarms, and faults that arrive one at a time. Every
+number above is generated by the code on this page, so none of it is evidence about a real grid. It
+is evidence about how these detector architectures behave relative to each other when the ground
+moves, which is the only claim I am making.</p>
+
+<footer>
+  Bolga&ccedil; G&uuml;len &middot; <a href="mailto:bolgacg1@gmail.com">bolgacg1@gmail.com</a>
+  &middot; written from scratch in vanilla JavaScript, August 2026.
+  The offline study behind the comparison table, in Python, is in the repository.
+</footer>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

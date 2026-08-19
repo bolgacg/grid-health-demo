@@ -1,0 +1,148 @@
+{
+ "transformer/stationary": {
+  "single threshold": {
+   "false_alarms_per_asset_month": 0.3706463726050232,
+   "detection_rate": 1.0,
+   "median_delay_days": 7.633333333333333,
+   "precision": 0.09206044730693876
+  },
+  "multi-method vote": {
+   "false_alarms_per_asset_month": 0.019753507373720825,
+   "detection_rate": 1.0,
+   "median_delay_days": 10.8,
+   "precision": 0.6613333333333333
+  },
+  "vote + persistence": {
+   "false_alarms_per_asset_month": 0.0002763920852055378,
+   "detection_rate": 1.0,
+   "median_delay_days": 13.466666666666665,
+   "precision": 0.9939393939393939
+  },
+  "vote + uncertainty": {
+   "false_alarms_per_asset_month": 0.01675694106339077,
+   "detection_rate": 1.0,
+   "median_delay_days": 11.833333333333332,
+   "precision": 0.6951421127891717
+  },
+  "full sequential gate": {
+   "false_alarms_per_asset_month": 0.0002763920852055378,
+   "detection_rate": 1.0,
+   "median_delay_days": 20.76666666666667,
+   "precision": 0.9939393939393939
+  }
+ },
+ "transformer/shift": {
+  "single threshold": {
+   "false_alarms_per_asset_month": 2.8084342919904275,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.013230000802027773
+  },
+  "multi-method vote": {
+   "false_alarms_per_asset_month": 2.6716089693226617,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.013899506411126616
+  },
+  "vote + persistence": {
+   "false_alarms_per_asset_month": 2.6502395906217133,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.014010959826701103
+  },
+  "vote + uncertainty": {
+   "false_alarms_per_asset_month": 0.8297005491732659,
+   "detection_rate": 1.0,
+   "median_delay_days": 61.9375,
+   "precision": 0.043789464025484955
+  },
+  "full sequential gate": {
+   "false_alarms_per_asset_month": 0.5332596548658646,
+   "detection_rate": 1.0,
+   "median_delay_days": 79.5125,
+   "precision": 0.06677897884665482
+  },
+  "gate + recalibration": {
+   "false_alarms_per_asset_month": 0.046844906988080325,
+   "detection_rate": 0.40555555555555556,
+   "median_delay_days": 34.104166666666664,
+   "precision": 0.2738634101015464
+  }
+ },
+ "districtheating/stationary": {
+  "single threshold": {
+   "false_alarms_per_asset_month": 4.147787678663216,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.008998771608635383
+  },
+  "multi-method vote": {
+   "false_alarms_per_asset_month": 3.214949253419435,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.011588222829082524
+  },
+  "vote + persistence": {
+   "false_alarms_per_asset_month": 3.061065174429623,
+   "detection_rate": 1.0,
+   "median_delay_days": 0.0,
+   "precision": 0.012162500694533276
+  },
+  "vote + uncertainty": {
+   "false_alarms_per_asset_month": 1.8808078525533816,
+   "detection_rate": 1.0,
+   "median_delay_days": 8.483333333333333,
+   "precision": 0.019938742574063226
+  },
+  "full sequential gate": {
+   "false_alarms_per_asset_month": 1.243713175829501,
+   "detection_rate": 1.0,
+   "median_delay_days": 23.020833333333336,
+   "precision": 0.03166828498529145
+  },
+  "gate + recalibration": {
+   "false_alarms_per_asset_month": 0.5911388077605266,
+   "detection_rate": 0.6657738095238095,
+   "median_delay_days": 17.4875,
+   "precision": 0.04707959671227286
+  }
+ },
+ "districtheating/shift": {
+  "single threshold": {
+   "false_alarms_per_asset_month": 1.903055253515707,
+   "detection_rate": 0.4886574074074074,
+   "median_delay_days": 4.491666666666666,
+   "precision": 0.009383407863924918
+  },
+  "multi-method vote": {
+   "false_alarms_per_asset_month": 1.4749854148854253,
+   "detection_rate": 0.4215608465608466,
+   "median_delay_days": 8.525,
+   "precision": 0.010400467278065801
+  },
+  "vote + persistence": {
+   "false_alarms_per_asset_month": 1.4253522113694594,
+   "detection_rate": 0.4144179894179894,
+   "median_delay_days": 8.683333333333334,
+   "precision": 0.010591247017202276
+  },
+  "vote + uncertainty": {
+   "false_alarms_per_asset_month": 0.8950627050169302,
+   "detection_rate": 0.4132275132275132,
+   "median_delay_days": 42.81249999999999,
+   "precision": 0.017152001793073107
+  },
+  "full sequential gate": {
+   "false_alarms_per_asset_month": 0.5892655200924276,
+   "detection_rate": 0.3534060846560847,
+   "median_delay_days": 45.491666666666674,
+   "precision": 0.02322703851507386
+  },
+  "gate + recalibration": {
+   "false_alarms_per_asset_month": 0.5618290251792117,
+   "detection_rate": 0.401223544973545,
+   "median_delay_days": 22.925,
+   "precision": 0.024721132678086778
+  }
+ }
+}

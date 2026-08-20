@@ -530,4 +530,83 @@ renderProv();
 renderStudies();
 setDay(N_DAYS-1);
 refresh();
+
+/* ---------- guided tour ---------- */
+(function(){
+  const g1 = RS.stationary['full sequential gate'][String(META.default_budget)];
+  const n1 = RS.stationary['static limit'][String(META.default_budget)];
+  const r2 = RS.shift['sequential gate + rolling recalibration'][String(META.default_budget)];
+  const STEPS = [
+    {sel:'header h1', k:'Welcome · 1 of 8', html:
+      `This page asks one question: <b>when should an automatic alarm be believed?</b> `+
+      `Machines that watch other machines raise alarms; too many false ones and nobody listens, `+
+      `too few and failures arrive unannounced. Everything here tests that trade on a simulated `+
+      `electricity grid, using methods from the SDU Center for Energy Informatics' own publications.`},
+    {sel:'#background .bg2', k:'The sources · 2 of 8', html:
+      `These six publications are where every idea comes from: three from Prof. Shaker's work on `+
+      `fault detection and asset management, three from Prof. Jørgensen's on deployment and `+
+      `control rooms. Nothing on this page is generic; each mechanism is borrowed from one of these.`},
+    {sel:'.mapcard', k:'The grid · 3 of 8', html:
+      `This is a small electricity network: one substation, four cables, twenty-four transformers. `+
+      `<b>Colour tells the truth</b>: green is healthy, amber is a fault quietly developing, red is damage. `+
+      `Three transformers really do fail during the 300 simulated days. Press play and watch it happen.`},
+    {sel:'#rail', k:'One transformer’s story · 4 of 8', html:
+      `Click any transformer on the diagram and this panel tells its story in three steps: what the `+
+      `sensors show, what the alarm system concludes from them, and where things are heading. `+
+      `The three-step structure is itself borrowed from Prof. Jørgensen's control-room work.`},
+    {sel:'.controls', k:'The experiment · 5 of 8', html:
+      `These chips are six different alarm-system designs, from a bare temperature limit to the `+
+      `centre's full gated architecture; each adds one safeguard from the publications above. `+
+      `The slider sets how much evidence a ticket requires. Change anything and every number on `+
+      `the page recomputes.`},
+    {sel:'#verdicts', k:'The score · 6 of 8', html:
+      `Three numbers judge each design: how many of the three real faults it caught, how many days `+
+      `of warning it gave, and how often it cried wolf. Below them is the ticket log exactly as a `+
+      `maintenance crew would receive it, each ticket marked in hindsight as genuine or false.`},
+    {sel:'#study2', k:'The finding · 7 of 8', html:
+      `The headline result: a plain threshold catches ${n1.detected.toFixed(0)} of 3 faults and raises `+
+      `${Math.round(n1.fa_per_month)} false alarms a month; the full gated design catches all 3 with almost none `+
+      `(precision ${(g1.precision*100).toFixed(0)}%). Then the twist: retraining the model weekly looks cleanest `+
+      `of all, and it is the only design that <b>misses the slow fault</b> (${r2.detected.toFixed(1)} of 3), `+
+      `because each retrain quietly learns the fault as the new normal.`},
+    {sel:'#provenance .prov', k:'Provenance · 8 of 8', html:
+      `Every mechanism is mapped here to the centre publication it came from and the foundational `+
+      `work behind it. That is the whole page. Explore freely; the Guided tour button at the top `+
+      `restarts this walkthrough at any time.`},
+  ];
+  const root=$('#tour'), hl=$('#tour-hl'), card=$('#tour-card');
+  let idx=0;
+  function place(){
+    const st=STEPS[idx];
+    const elm=document.querySelector(st.sel);
+    if(!elm){ next(); return; }
+    elm.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});
+    setTimeout(()=>{
+      const r=elm.getBoundingClientRect(), sx=window.scrollX, sy=window.scrollY;
+      root.style.height=document.documentElement.scrollHeight+'px';
+      hl.style.left=(r.left+sx-8)+'px'; hl.style.top=(r.top+sy-8)+'px';
+      hl.style.width=(r.width+16)+'px'; hl.style.height=(r.height+16)+'px';
+      const dots=STEPS.map((_,i)=>`<i class="${i===idx?'on':''}"></i>`).join('');
+      card.innerHTML=`<div class="tk">${st.k}</div><p>${st.html}</p>
+        <div class="tour-nav"><div class="dots">${dots}</div>
+        ${idx>0?'<button class="tour-btn" id="tprev">Back</button>':''}
+        <button class="tour-btn" id="tskip">Close</button>
+        <button class="tour-btn primary" id="tnext">${idx<STEPS.length-1?'Next':'Done'}</button></div>`;
+      const cw=Math.min(400, innerWidth-32);
+      let cx=r.left+sx+r.width+18, cy=r.top+sy;
+      if (cx+cw > sx+innerWidth-16) { cx=Math.max(16+sx, r.left+sx); cy=r.bottom+sy+14; }
+      if (cy+230 > sy+innerHeight+sy) {}
+      card.style.left=cx+'px'; card.style.top=cy+'px';
+      $('#tnext').onclick=next; $('#tskip').onclick=stop;
+      const p=$('#tprev'); if(p) p.onclick=()=>{idx=Math.max(0,idx-1); place();};
+    }, matchMedia('(prefers-reduced-motion: reduce)').matches?50:450);
+  }
+  function next(){ if(idx>=STEPS.length-1){stop();return;} idx++; place(); }
+  function stop(){ root.classList.remove('on'); try{localStorage.setItem('ghd_tour','done');}catch(e){} }
+  function start(){ idx=0; root.classList.add('on'); place(); }
+  $('#tourbtn').addEventListener('click', start);
+  let seen=null; try{ seen=localStorage.getItem('ghd_tour'); }catch(e){}
+  if (!seen) setTimeout(start, 700);
+})();
+
 })();

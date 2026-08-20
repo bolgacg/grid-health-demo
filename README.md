@@ -1,17 +1,33 @@
-# Alarm quality under regime change
+# The Night Shift
 
-A study of fault-detection architecture on two simulated energy systems, built around the PhD
-position in Energy Informatics (Theme 2) at the SDU Center for Energy Informatics.
+A predictive-maintenance control room for a simulated 10 kV distribution network, built for
+the SDU Center for Energy Informatics (PhD application, Theme 2). Every mechanism is taken
+from the centre's own publications; the provenance section on the page maps each one to its
+source and to the foundational work it stands on.
 
-**Live page:** https://bolgacg.github.io/grid-health-demo/
+Live: https://bolgacg.github.io/grid-health-demo/
 
-The question: when the operating regime changes after a detector has been fitted, what happens to
-the alarms an operator actually receives? The short answer is that detection rate and detection
-delay both improve while the system becomes useless, and only precision reveals it.
+## What it shows
 
-- `index.html` + `app.js` — the interactive page. Vanilla JavaScript, no libraries, no build step.
-  The simulation, the ensemble, the detection gates and the scoring all run in the browser.
-- `study/` — the offline Python study behind the comparison table: two systems, five seeds,
-  120 assets, 300 days. `python3 study/run_study.py` reproduces `study/results.json`.
+- A one-line diagram of 24 distribution transformers on four feeders, played over 300 days.
+  Three cooling faults develop, one slowly enough to hide.
+- Five detector architectures, each adding one idea from the centre's papers: static limit,
+  learned-forecaster residual, multi-method vote, uncertainty-weighted vote, and a full
+  sequential gate (CUSUM persistence). A sixth arm retrains weekly.
+- The finding: under a regime change, weekly retraining produces the cleanest work-order
+  queue on the board and is the only architecture that misses the slow fault. Retraining
+  absorbs slow decay into the definition of normal, and every redeploy restarts the
+  evidence accumulator.
+- A censoring-aware cable-replacement study: naive lifetime estimates vs Kaplan-Meier vs a
+  fitted Weibull hazard, costed in prevented failures at a fixed budget.
 
-Written by Bolgaç Gülen, August 2026.
+## Reproduce
+
+```
+python3 study2/run_study.py   # seeds 0-4, ~1 s, numpy only
+```
+
+Outputs `study2/results.json` (verdicts) and `study2/timeline.json` (the browser payload,
+bundled as `data.js`). The page is static: no build step, no dependencies.
+
+Simulated data throughout; the page says so. Bolgaç Gülen, August 2026.

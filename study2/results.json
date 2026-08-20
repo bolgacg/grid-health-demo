@@ -551,6 +551,56 @@
     "precision": 0.688,
     "tickets": 11.2
    }
+  },
+  "paired: frozen-baseline gate + retrained gate": {
+   "3.6": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 18.0,
+    "fa_per_month": 0.35,
+    "precision": 0.939,
+    "tickets": 45.2
+   },
+   "3.2": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 18.4,
+    "fa_per_month": 0.675,
+    "precision": 0.89,
+    "tickets": 48.2
+   },
+   "2.9": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 18.4,
+    "fa_per_month": 1.1,
+    "precision": 0.833,
+    "tickets": 52.0
+   },
+   "2.6": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 20.8,
+    "fa_per_month": 1.675,
+    "precision": 0.769,
+    "tickets": 57.0
+   },
+   "2.3": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 21.2,
+    "fa_per_month": 2.425,
+    "precision": 0.698,
+    "tickets": 63.6
+   },
+   "2.0": {
+    "detected": 3.0,
+    "of": 3.0,
+    "warning_days": 21.4,
+    "fa_per_month": 3.75,
+    "precision": 0.602,
+    "tickets": 74.6
+   }
   }
  },
  "cables": {

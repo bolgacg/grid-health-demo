@@ -149,6 +149,26 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;bac
 .limits p{font-size:13.5px;color:var(--soft);margin-bottom:8px;max-width:820px}
 .repro{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:10px 14px;margin-top:12px;color:var(--soft);display:inline-block}
 
+.howto{border-left:3px solid var(--accent);padding:4px 0 4px 20px;margin:0 0 26px;max-width:820px}
+.howto ol{margin:0;padding-left:18px}
+.howto li{margin-bottom:7px;color:var(--ink)}
+.howto li::marker{font-family:var(--mono);color:var(--accent);font-weight:500}
+.bg2{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:8px}
+@media(max-width:820px){.bg2{grid-template-columns:1fr}}
+.bgcol h3{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--soft);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.bgcol h3 span{color:var(--ink)}
+.bgitem{padding:9px 0;border-bottom:1px solid var(--rule);font-size:14px}
+.bgitem:last-child{border-bottom:none}
+.bgitem b{font-weight:600}
+.bgitem .use{color:var(--soft);display:block;margin-top:2px;font-size:13px}
+.bgfoot{margin-top:14px;font-size:13.5px;color:var(--soft);max-width:820px}
+.ctl .hint{font-size:11.5px;color:var(--faint);margin-top:6px;max-width:300px;line-height:1.4}
+details.gloss{margin-top:18px;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+details.gloss summary{cursor:pointer;padding:12px 18px;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--soft)}
+details.gloss[open] summary{border-bottom:1px solid var(--rule)}
+.glossbody{padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px 26px}
+.glossbody div{font-size:13px;color:var(--soft)}
+.glossbody b{color:var(--ink);font-family:var(--mono);font-size:12px;font-weight:500}
 footer{border-top:1px solid var(--rule);padding:22px 0 44px;background:var(--panel)}
 footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:12px;color:var(--faint)}
 
@@ -173,15 +193,61 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
   </div>
 </header>
 
+
+<section id="background">
+  <div class="wrap">
+    <div class="sec-label">Section 1 · Background</div>
+    <h2>The work this page builds on</h2>
+    <p class="lede">Nothing here is generic anomaly-detection practice. Each part of the demonstration is
+    taken from a specific line of the centre's published work; the debts, briefly, are these.</p>
+    <div class="bg2">
+      <div class="bgcol">
+        <h3><span>Prof. Hamid Reza Shaker</span> · fault detection and asset management</h3>
+        <div class="bgitem"><b>Multi-method fault detection with MC-dropout-weighted voting</b> (Energy and
+          Buildings, 2026)<span class="use">the vote stage, the uncertainty weighting, and the premise that
+          detectors must be trained on healthy operation because faults are rare and unlabelled</span></div>
+        <div class="bgitem"><b>Survival models for predictive maintenance and RUL</b> (Sensors, 2026), with
+          Mortensen &amp; Shaker on neural Weibull hazards (IEEE Access, 2025)<span class="use">the
+          cable-replacement study and its treatment of censored lifetimes</span></div>
+        <div class="bgitem"><b>Explainable AI for energy-systems maintenance</b> (Renewable and Sustainable
+          Energy Reviews, 2025)<span class="use">every ticket in the log carries its reason in plain words</span></div>
+      </div>
+      <div class="bgcol">
+        <h3><span>Prof. Bo Nørregaard Jørgensen</span> · systems and deployment</h3>
+        <div class="bgitem"><b>Deployment feasibility as sequential, non-compensable gates</b> (Ma, Cong &amp;
+          Jørgensen, Energies, 2026)<span class="use">the detection pipeline's gate order: vote, uncertainty,
+          persistence, with no later score able to buy back a failed stage</span></div>
+        <div class="bgitem"><b>Infostructure: situation awareness for power-system control rooms</b>
+          (Jørgensen &amp; Ma, Energies, 2026), building on Endsley (1995)<span class="use">the three-level
+          asset panel: perception, comprehension, projection</span></div>
+        <div class="bgitem"><b>Digital-twin framework for distributed energy resources in distribution
+          grids</b> (Energies, 2024)<span class="use">the simulated network as a testbed for operating
+          decisions</span></div>
+      </div>
+    </div>
+    <p class="bgfoot">The complete mapping, including the foundational literature both groups cite
+    (Gal &amp; Ghahramani; Page; Kaplan &amp; Meier; Cox; Lundberg &amp; Lee; Gama), is in the
+    <a href="#provenance">provenance section</a> at the end.</p>
+  </div>
+</section>
+
 <section id="room">
   <div class="wrap">
-    <div class="sec-label">Section 1 · Interactive simulation</div>
+    <div class="sec-label">Section 2 · Interactive simulation</div>
     <h2>The network, observed for 300 days</h2>
-    <p class="lede">A simulated 10&nbsp;kV distribution network runs through 300 days. Three transformers
-    develop cooling faults, one of them slowly enough to be difficult. Press play, select any asset, and set
-    how conservative the detectors should be. The right panel presents the selected asset at the three levels
-    of situation awareness, following Endsley (1995) and the centre's control-room work:
-    <span class="mono">perception, comprehension, projection</span>.</p>
+    <p class="lede">A simulated 10&nbsp;kV distribution network runs through 300 days while detectors watch
+    every transformer. Three things to know before pressing play:</p>
+    <div class="howto"><ol>
+      <li><strong>The diagram is a small electricity grid.</strong> Every twin-circle symbol is a
+        transformer, coloured by its true condition: green is healthy, amber is a developing fault, red is
+        damage. Three of the twenty-four develop real faults during the run.</li>
+      <li><strong>The selected detector files maintenance tickets.</strong> The small triangles on the
+        diagram are its tickets. The chips below switch between detector designs, from a bare temperature
+        limit to the centre's full gated architecture.</li>
+      <li><strong>The three tiles score the run.</strong> How many of the three real faults were caught, how
+        many days before damage, and how many tickets were false alarms. The right panel tells the story of
+        whichever transformer you select.</li>
+    </ol></div>
 
     <div class="room">
       <div class="mapcard">
@@ -207,10 +273,12 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
           <button class="chip on" data-scenario="stationary">stationary</button>
           <button class="chip warn" data-scenario="shift">regime change · heat wave + EV growth</button>
         </div>
+        <div class="hint">whether the world keeps resembling the data the detectors were trained on</div>
       </div>
       <div class="ctl">
         <div class="lbl">Detector architecture</div>
         <div class="chips" id="arch-chips"></div>
+        <div class="hint">each design adds one safeguard from the centre's publications</div>
       </div>
       <div class="ctl budget">
         <div class="lbl">Alarm budget · <span class="val" id="budget-val"></span></div>
@@ -218,6 +286,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
         <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:4px">
           <span>conservative</span><span>permissive</span>
         </div>
+        <div class="hint">how much evidence a ticket requires; conservative means fewer, surer tickets</div>
       </div>
     </div>
 
@@ -227,12 +296,27 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
       <div class="oh"><span class="t">Maintenance ticket log · as issued by the selected architecture</span><span class="c" id="ordercount"></span></div>
       <div class="olist" id="orderlist"></div>
     </div>
+
+    <details class="gloss">
+      <summary>Terms used on this page</summary>
+      <div class="glossbody">
+        <div><b>expected temperature</b> · what a model trained on the first 60 healthy days predicts for today's load and weather</div>
+        <div><b>residual</b> · the measured temperature minus the expected one</div>
+        <div><b>z</b> · the residual divided by its normal day-to-day variation; values above about 3 are unusual</div>
+        <div><b>accumulated evidence (CUSUM)</b> · a running total of suspicion: it grows while readings stay unusual and drains when they return to normal</div>
+        <div><b>ensemble disagreement</b> · fifteen models trained on resamplings of the same data; when they stop agreeing, today's conditions are unlike the training data</div>
+        <div><b>lead time</b> · days between a detector's first ticket on an asset and the day its fault becomes damage</div>
+        <div><b>false alarm</b> · a ticket on a transformer that was in fact healthy</div>
+        <div><b>regime change</b> · the world stops resembling the training data; here, a heat wave followed by growing electric-vehicle charging</div>
+        <div><b>censoring</b> · a cable that was replaced early or still alive when observation ended; its full lifetime was never seen</div>
+      </div>
+    </details>
   </div>
 </section>
 
 <section id="studies">
   <div class="wrap">
-    <div class="sec-label">Section 2 · Offline studies</div>
+    <div class="sec-label">Section 3 · Offline studies</div>
     <h2>Three questions, answered in operational units</h2>
     <p class="lede">Everything below is computed offline over five seeded runs and reported in the units
     maintenance planning actually uses: days of lead time before damage, and false alarms per month across
@@ -245,7 +329,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
 
 <div class="paper" id="provenance">
   <div class="wrap">
-    <div class="sec-label">Section 3 · Provenance</div>
+    <div class="sec-label">Section 4 · Provenance</div>
     <h2>Methodological provenance</h2>
     <p class="lede">Each mechanism in the demonstration, the centre publication it is drawn from, and the
     foundational work that publication builds on. Green marks Prof. Shaker's line of work, blue

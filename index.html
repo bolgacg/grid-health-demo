@@ -169,6 +169,25 @@ details.gloss[open] summary{border-bottom:1px solid var(--rule)}
 .glossbody{padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px 26px}
 .glossbody div{font-size:13px;color:var(--soft)}
 .glossbody b{color:var(--ink);font-family:var(--mono);font-size:12px;font-weight:500}
+/* guided tour */
+#tour{position:absolute;top:0;left:0;right:0;z-index:50;display:none}
+#tour.on{display:block}
+.tour-hl{position:absolute;border:2px solid var(--accent);border-radius:8px;
+  box-shadow:0 0 0 9999px rgba(26,29,33,.55);transition:all .35s ease;pointer-events:none}
+.tour-card{position:absolute;width:min(400px,calc(100vw - 32px));background:var(--card);
+  border:1px solid var(--rule2);border-radius:8px;padding:18px 20px;box-shadow:0 6px 30px rgba(0,0,0,.18)}
+.tour-card .tk{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.tour-card p{font-size:14px;line-height:1.55;color:var(--ink);margin:0 0 12px}
+.tour-nav{display:flex;align-items:center;gap:8px}
+.tour-nav .dots{flex:1;display:flex;gap:5px}
+.tour-nav .dots i{width:6px;height:6px;border-radius:50%;background:var(--rule2)}
+.tour-nav .dots i.on{background:var(--accent)}
+.tour-btn{font-family:var(--mono);font-size:12px;padding:7px 14px;border-radius:4px;border:1px solid var(--rule2);background:var(--card);color:var(--soft);cursor:pointer}
+.tour-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tour-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tour-btn.primary:hover{color:#fff;opacity:.92}
+.tour-open{font-family:var(--mono);font-size:12px;padding:6px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--card);color:var(--accent);cursor:pointer;margin-left:12px}
+.tour-open:hover{background:var(--accent);color:#fff}
 footer{border-top:1px solid var(--rule);padding:22px 0 44px;background:var(--panel)}
 footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-family:var(--mono);font-size:12px;color:var(--faint)}
 
@@ -189,7 +208,8 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
     architectures assembled from the centre's own publications. Every mechanism is
     <a href="#provenance">mapped to its source</a> in the provenance section.</p>
     <div class="byline">Bolgaç Gülen · Odense, August 2026 · simulation and detectors reproducible from
-    <a href="https://github.com/bolgacg/grid-health-demo" rel="noopener">the code</a></div>
+    <a href="https://github.com/bolgacg/grid-health-demo" rel="noopener">the code</a>
+    <button class="tour-open" id="tourbtn">Guided tour</button></div>
   </div>
 </header>
 
@@ -357,6 +377,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
   </div>
 </footer>
 
+<div id="tour"><div class="tour-hl" id="tour-hl"></div><div class="tour-card" id="tour-card"></div></div>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

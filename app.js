@@ -1,362 +1,511 @@
+/* The Night Shift - control room for a simulated 10 kV network.
+   All data precomputed offline (study2/run_study.py, seeds 0-4); this file only renders. */
 'use strict';
-/* Alarm quality under regime change.
-   Port of the offline Python study (study/) to the browser. Same model,
-   same gates, same scoring, smaller fleet so it runs instantly. */
+(function(){
+const TL = window.TL, RS = window.RS;
+const META = TL.meta;
+const BUDGETS = META.budgets;               // [3.6 .. 2.0] z-units
+const N_DAYS = META.n_days, TRAIN = META.train_days, REGIME = META.regime_day;
+const ARCHS = [
+  {key:'naive',  label:'static limit'},
+  {key:'single', label:'forecaster residual'},
+  {key:'vote',   label:'multi-method vote'},
+  {key:'gated',  label:'vote + uncertainty weighting'},
+  {key:'seq',    label:'full sequential gate'},
+  {key:'recal',  label:'gate + weekly retraining', rsLabel:'sequential gate + rolling recalibration', shiftOnly:true},
+];
+const rsLabel = a => a.rsLabel || a.label;
 
-const HPD = 24, DAYS = 300, N = DAYS * HPD, ASSETS = 60, WARMUP = 90 * HPD;
-const SHIFT_AT = Math.floor(N * 0.55);
+const S = { scenario:'stationary', arch:'seq', bIdx:2, day:0, sel:4, playing:false };
+try{ const q=new URLSearchParams(location.search);
+  if(q.get('w')) S.scenario=q.get('w');
+  if(q.get('a')) S.arch=q.get('a');
+  if(q.get('t')) S.sel=+q.get('t');
+}catch(e){}
 
-/* ---------- seeded rng ---------- */
-function rng(seed){ let s = seed >>> 0;
-  return () => { s ^= s<<13; s>>>=0; s ^= s>>17; s ^= s<<5; s>>>=0; return s/4294967296; }; }
-function gauss(r){ let u=0,v=0; while(!u) u=r(); while(!v) v=r();
-  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+/* ---------- topology ---------- */
+const FEEDER_Y = [92, 218, 344, 470];
+const NODE_X = [235, 345, 455, 565, 675, 785];
+const BUS_X = 150;
+function assetPos(a){ const f = Math.floor(a/6), i = a%6; return {x:NODE_X[i], y:FEEDER_Y[f], f}; }
+const FNAMES = ['F1','F2','F3','F4'];
 
-/* ---------- systems ---------- */
-function dailyShape(i, peak1, peak2){
-  const h = i % HPD, dow = Math.floor(i/HPD)%7;
-  const base = 0.55 + 0.45*Math.exp(-0.5*Math.pow((h-peak1)/3,2))
-                    + 0.45*Math.exp(-0.5*Math.pow((h-peak2)/2.5,2));
-  return base * (dow>=5 ? 0.80 : 1.0);
-}
-
-function build(sys, shift, sev, noiseMul, seed){
-  const r = rng(seed), faulty = [], fstart = [];
-  const y = [], X0 = [], X1 = [];
-  const ambient = new Float64Array(N);
-  for(let i=0;i<N;i++)
-    ambient[i] = 9 + 7*Math.sin(2*Math.PI*(i-2000)/(365*HPD))
-                   + 3*Math.sin(2*Math.PI*((i%HPD)-4)/HPD);
-
-  for(let a=0;a<ASSETS;a++){
-    const isF = r() < 0.25;
-    faulty.push(isF);
-    fstart.push(isF ? Math.floor(N*0.45 + r()*(N*0.35)) : -1);
-    const yy = new Float64Array(N), f0 = new Float64Array(N), f1 = new Float64Array(N);
-
-    if(sys === 'tx'){
-      const rated = 0.45 + r()*0.30, tau = 3;
-      let th = 0;
-      for(let i=0;i<N;i++){
-        let ld = rated*dailyShape(i,8,19) + gauss(r)*0.035;
-        if(shift && i>=SHIFT_AT) ld *= 1.28;
-        ld = Math.min(1.35, Math.max(0.02, ld));
-        let amb = ambient[i] + (shift && i>=SHIFT_AT ? 6 : 0);
-        let k = 55;
-        if(isF && i>=fstart[a])
-          k *= 1 + 0.16*sev*Math.min(1,(i-fstart[a])/(30*HPD));
-        th += (k*ld*ld - th)/tau;
-        yy[i] = th + gauss(r)*0.9*noiseMul;
-        f0[i] = ld; f1[i] = amb/30;
-      }
-    } else {
-      const size = 0.5 + r()*0.7, eff0 = 0.72 + r()*0.08;
-      for(let i=0;i<N;i++){
-        const amb = ambient[i];
-        let sup = 75 - 0.45*amb + (shift && i>=SHIFT_AT ? 6 : 0);
-        let dem = size*dailyShape(i,7,20)*Math.min(1.6,Math.max(0.15,(18-amb)/12));
-        if(shift && i>=SHIFT_AT) dem *= 1.28;
-        dem = Math.max(0.02, dem + gauss(r)*0.03);
-        let eff = eff0;
-        if(isF && i>=fstart[a])
-          eff *= 1 - 0.085*sev*Math.min(1,(i-fstart[a])/(45*HPD));
-        yy[i] = sup - eff*(sup-28) + 4.5*dem + gauss(r)*0.55*noiseMul;
-        f0[i] = dem; f1[i] = sup/80;
-      }
-    }
-    y.push(yy); X0.push(f0); X1.push(f1);
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const el = (tag, attrs, parent) => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const e = ['svg','g','path','circle','rect','line','text','polyline','polygon'].includes(tag)
+    ? document.createElementNS(ns, tag) : document.createElement(tag);
+  for (const k in attrs||{}) {
+    if (k==='text') e.textContent = attrs[k];
+    else e.setAttribute(k, attrs[k]);
   }
-  return {y, X0, X1, faulty, fstart};
-}
-
-/* ---------- bootstrapped quadratic ridge ensemble ---------- */
-function phi(a,b){ return [1,a,b,a*a,b*b,a*b]; }
-
-function solve(A,b){                       // gaussian elimination, 6x6
-  const n=b.length, M=A.map((row,i)=>row.concat([b[i]]));
-  for(let c=0;c<n;c++){
-    let p=c; for(let i=c+1;i<n;i++) if(Math.abs(M[i][c])>Math.abs(M[p][c])) p=i;
-    [M[c],M[p]]=[M[p],M[c]];
-    if(Math.abs(M[c][c])<1e-12) continue;
-    for(let i=0;i<n;i++){ if(i===c) continue;
-      const f=M[i][c]/M[c][c];
-      for(let j=c;j<=n;j++) M[i][j]-=f*M[c][j]; }
-  }
-  return M.map((row,i)=> Math.abs(row[i])<1e-12 ? 0 : row[n]/row[i]);
-}
-
-function fitEnsemble(d, from, to, seed, K=8){
-  const r = rng(seed), W=[];
-  const healthy = []; for(let a=0;a<ASSETS;a++) if(!d.faulty[a]) healthy.push(a);
-  const pool=[];
-  for(const a of healthy) for(let i=from;i<to;i+=3) pool.push([d.X0[a][i], d.X1[a][i], d.y[a][i]]);
-  const n=pool.length;
-  for(let k=0;k<K;k++){
-    const A=Array.from({length:6},()=>new Float64Array(6)), bb=new Float64Array(6);
-    for(let s=0;s<n;s++){
-      const p=pool[Math.floor(r()*n)], f=phi(p[0],p[1]);
-      for(let i=0;i<6;i++){ for(let j=0;j<6;j++) A[i][j]+=f[i]*f[j]; bb[i]+=f[i]*p[2]; }
-    }
-    for(let i=0;i<6;i++) A[i][i] += 1e-3*n;
-    W.push(solve(A.map(rw=>Array.from(rw)), Array.from(bb)));
-  }
-  return W;
-}
-
-function predict(W,a,b){
-  const f=phi(a,b); let m=0, m2=0;
-  for(const w of W){ let v=0; for(let i=0;i<6;i++) v+=w[i]*f[i]; m+=v; m2+=v*v; }
-  const mean=m/W.length;
-  return [mean, Math.sqrt(Math.max(0, m2/W.length - mean*mean))];
-}
-
-function residuals(d, W, from){
-  const R=[], U=[];
-  for(let a=0;a<ASSETS;a++){
-    const rr=new Float64Array(N), uu=new Float64Array(N);
-    for(let i=0;i<N;i++){
-      const [m,s]=predict(W,d.X0[a][i],d.X1[a][i]);
-      rr[i]=d.y[a][i]-m; uu[i]=s;
-    }
-    R.push(rr); U.push(uu);
-  }
-  return [R,U];
-}
-
-/* ---------- detection ---------- */
-function stats(R){
-  const Z=[],E=[],C=[];
-  for(let a=0;a<ASSETS;a++){
-    let m=0; for(let i=0;i<WARMUP;i++) m+=R[a][i]; m/=WARMUP;
-    let v=0; for(let i=0;i<WARMUP;i++) v+=(R[a][i]-m)**2; const sd=Math.sqrt(v/WARMUP)+1e-9;
-    const z=new Float64Array(N), e=new Float64Array(N), c=new Float64Array(N);
-    let acc=0, cus=0; const lam=0.02, k=Math.sqrt(lam/(2-lam));
-    for(let i=0;i<N;i++){
-      z[i]=(R[a][i]-m)/sd;
-      acc=lam*z[i]+(1-lam)*acc; e[i]=acc/k;
-      cus=Math.max(0,cus+z[i]-0.5); c[i]=cus;
-    }
-    Z.push(z);E.push(e);C.push(c);
-  }
-  return [Z,E,C];
-}
-
-function quantile(arrs, q, upto){
-  const v=[]; for(const a of arrs) for(let i=0;i<upto;i+=7) v.push(a[i]);
-  v.sort((x,y)=>x-y);
-  return v[Math.min(v.length-1, Math.floor(q*v.length))];
-}
-
-function detect(R,U,cfg){
-  const [Z,E,C]=stats(R);
-  const tz=quantile(Z,1-2e-4,WARMUP), te=quantile(E,1-2e-4,WARMUP), tc=quantile(C,1-2e-4,WARMUP);
-  const need = cfg.vote, pers = cfg.persistence;
-  const fired=[];
-  for(let a=0;a<ASSETS;a++){
-    let ucut=Infinity;
-    if(cfg.unc){ const one=[U[a]]; ucut=quantile(one,0.98,WARMUP); }
-    const f=new Uint8Array(N); let run=0;
-    for(let i=0;i<N;i++){
-      let v=(Z[a][i]>tz)+(E[a][i]>te)+(C[a][i]>tc);
-      let ok = v>=need;
-      if(ok && cfg.unc && U[a][i]>ucut) ok=false;
-      run = ok ? run+1 : 0;
-      f[i] = (i>=WARMUP && run>=pers) ? 1 : 0;
-    }
-    fired.push(f);
-  }
-  return fired;
-}
-
-function driftOnset(U){
-  const m=new Float64Array(N);
-  for(let i=0;i<N;i++){ let s=0; for(let a=0;a<ASSETS;a++) s+=U[a][i]; m[i]=s/ASSETS; }
-  const cut=quantile([m],0.99,WARMUP);
-  let run=0;
-  for(let i=WARMUP;i<N;i++){ run = m[i]>cut ? run+1 : 0; if(run>=3*HPD) return i; }
-  return null;
-}
-
-function score(fired,d){
-  const REF=7*HPD;
-  let tickets=0, healthyHours=0, detected=0; const delays=[];
-  const marks=[];
-  for(let a=0;a<ASSETS;a++){
-    const end = d.faulty[a] ? d.fstart[a] : N;
-    let next=WARMUP;
-    for(let i=WARMUP;i<end;i++) if(fired[a][i] && i>=next){ tickets++; next=i+REF; marks.push([i,0]); }
-    healthyHours += Math.max(0,end-WARMUP);
-    if(d.faulty[a]){
-      let first=-1;
-      for(let i=d.fstart[a];i<N;i++) if(fired[a][i]){ first=i; break; }
-      if(first>=0){ detected++; delays.push((first-d.fstart[a])/24); marks.push([first,1]); }
-    }
-  }
-  const nF=d.faulty.filter(Boolean).length;
-  delays.sort((x,y)=>x-y);
-  const months=healthyHours/(24*30);
-  return {
-    fa: months? tickets/months : NaN,
-    rate: nF? detected/nF : NaN,
-    delay: delays.length? delays[Math.floor(delays.length/2)] : NaN,
-    prec: (detected+tickets)? detected/(detected+tickets) : NaN,
-    marks
-  };
-}
-
-const CFGS = {
-  single:{vote:1,unc:false,persistence:1},
-  vote:{vote:2,unc:false,persistence:1},
-  votep:{vote:2,unc:false,persistence:6},
-  voteu:{vote:2,unc:true,persistence:1},
-  gate:{vote:2,unc:true,persistence:6},
-  recal:{vote:2,unc:true,persistence:6,recal:true}
+  if (parent) parent.appendChild(e);
+  return e;
 };
-
-/* ---------- run ---------- */
-let LAST=null;
-function run(){
-  const sys=document.getElementById('sys').value;
-  const cfgName=document.getElementById('cfg').value;
-  const shift=document.getElementById('shift').value==='1';
-  const sev=parseFloat(document.getElementById('sev').value);
-  const noise=parseFloat(document.getElementById('noise').value);
-  const cfg=CFGS[cfgName];
-
-  const d=build(sys,shift,sev,noise,12345);
-  let W=fitEnsemble(d,0,WARMUP,7);
-  let [R,U]=residuals(d,W,0);
-
-  let fired;
-  if(cfg.recal){
-    const onset=driftOnset(U);
-    if(onset!==null && onset+44*HPD<N){
-      const settle=onset+14*HPD;
-      const W2=fitEnsemble(d,settle,settle+30*HPD,77);
-      for(let a=0;a<ASSETS;a++)
-        for(let i=settle;i<N;i++){
-          const [m,s]=predict(W2,d.X0[a][i],d.X1[a][i]);
-          R[a][i]=d.y[a][i]-m; U[a][i]=s;
-        }
-      fired=detect(R,U,cfg);
-      for(let a=0;a<ASSETS;a++)
-        for(let i=settle;i<settle+30*HPD;i++) fired[a][i]=0;
-    } else fired=detect(R,U,cfg);
-  } else fired=detect(R,U,cfg);
-
-  const s=score(fired,d);
-  LAST={d,R,U,s,shift};
-  showMetrics(s);
-  draw(d,R,U,s,shift);
+const fmt1 = x => (Math.round(x*10)/10).toString();
+const bKey = () => String(BUDGETS[S.bIdx]);
+const data = () => TL[S.scenario];
+const archAvailable = a => !(a.shiftOnly && S.scenario!=='shift');
+function currentArch(){ const a = ARCHS.find(x=>x.key===S.arch); return archAvailable(a) ? a : ARCHS[4]; }
+function maxRamp(a){ const r = data().ramp[a]; let m=0; for (const v of r) if (v>m) m=v; return m; }
+function isFault(a){ return data().fault_assets.includes(a); }
+function ticketsFor(archKey){ return data().tickets[bKey()][archKey] || {}; }
+function sigmaOf(a){
+  const d = data(); let s=0, n=0;
+  for (let t=5;t<TRAIN;t++){ const e = d.hotspot[a][t]-d.pred[a][t]; s+=e*e; n++; }
+  return Math.sqrt(s/n);
 }
+function kMean(a){ const K=data().K[a]; let s=0; for (let t=0;t<TRAIN;t++) s+=K[t]; return s/TRAIN; }
 
-function showMetrics(s){
-  const f=(v,n=2)=> isNaN(v)? '&ndash;' : v.toFixed(n);
-  const pc = isNaN(s.prec)? '&ndash;' : Math.round(s.prec*100)+'%';
-  document.getElementById('mx').innerHTML = `
-    <div class="metric"><div class="k">Tickets / asset&middot;month</div><div class="v">${f(s.fa)}</div></div>
-    <div class="metric"><div class="k">Detection rate</div><div class="v">${f(s.rate*100,0)}%</div></div>
-    <div class="metric"><div class="k">Median delay</div><div class="v">${f(s.delay,1)}<span style="font-size:14px"> d</span></div></div>
-    <div class="metric"><div class="k">Precision</div><div class="v">${pc}</div></div>`;
-}
-
-function draw(d,R,U,s,shift){
-  const cv=document.getElementById('cv'), dpr=window.devicePixelRatio||1;
-  const w=cv.clientWidth, h=300;
-  cv.width=w*dpr; cv.height=h*dpr;
-  const g=cv.getContext('2d'); g.scale(dpr,dpr);
-  g.clearRect(0,0,w,h);
-
-  const L=46,Rm=12,T=12,B=26, pw=w-L-Rm, ph=h-T-B;
-  let lo, hi;
-  const x=i=>L+pw*i/N;
-  const yv2=v=>T+ph*(1-(v-lo)/(hi-lo));
-
-  g.strokeStyle='#e6e1da'; g.lineWidth=1;
-  for(let k=0;k<=4;k++){ const yy=T+ph*k/4; g.beginPath(); g.moveTo(L,yy); g.lineTo(L+pw,yy); g.stroke(); }
-  g.fillStyle='#767d86'; g.font='11px DM Mono, monospace'; g.textAlign='right';
-  for(let k=0;k<=4;k++){ const v=hi-(hi-lo)*k/4; g.fillText(v.toFixed(1),L-6,T+ph*k/4+4); }
-  g.textAlign='center';
-  for(let dday=0;dday<=DAYS;dday+=50) g.fillText('d'+dday, x(dday*HPD), h-8);
-
-  // daily means: hourly traces are unreadable over 300 days
-  const D = DAYS;
-  const dayMean = (arr) => { const o=new Float64Array(D);
-    for(let d=0;d<D;d++){ let s2=0; for(let k=0;k<HPD;k++) s2+=arr[d*HPD+k]; o[d]=s2/HPD; } return o; };
-  const xd = d => L + pw*d/D;
-
-  lo=1e9; hi=-1e9;
-  const daily=[];
-  for(let a=0;a<ASSETS;a++){ const dm=dayMean(R[a]); daily.push(dm);
-    for(let d=0;d<D;d++){ if(dm[d]<lo)lo=dm[d]; if(dm[d]>hi)hi=dm[d]; } }
-  const pad2=(hi-lo)*0.12||1; lo-=pad2; hi+=pad2;
-
-  g.clearRect(0,0,w,h);
-  g.strokeStyle='#e6e1da'; g.lineWidth=1;
-  for(let k=0;k<=4;k++){ const yy2=T+ph*k/4; g.beginPath(); g.moveTo(L,yy2); g.lineTo(L+pw,yy2); g.stroke(); }
-  g.fillStyle='#767d86'; g.font='11px DM Mono, monospace'; g.textAlign='right';
-  for(let k=0;k<=4;k++){ const v=hi-(hi-lo)*k/4; g.fillText(v.toFixed(1),L-6,T+ph*k/4+4); }
-  g.textAlign='center';
-  for(let dday=0;dday<=DAYS;dday+=50) g.fillText('d'+dday, xd(dday), h-8);
-
-  g.lineWidth=1.1;
-  for(let a=0;a<ASSETS;a++){
-    g.strokeStyle = d.faulty[a] ? 'rgba(162,59,40,.60)' : 'rgba(18,89,90,.28)';
-    g.beginPath();
-    for(let dd=0;dd<D;dd++){ const px=xd(dd), py=yv2(daily[a][dd]); dd?g.lineTo(px,py):g.moveTo(px,py); }
-    g.stroke();
+/* ---------- the map ---------- */
+const MAP = {nodes:[], pins:null, svg:null};
+function buildMap(){
+  const svg = el('svg', {viewBox:'0 0 858 560', role:'img',
+    'aria-label':'One-line diagram of the simulated 10 kV network'}, $('#gridmap'));
+  MAP.svg = svg;
+  // bus + substation
+  el('line',{x1:BUS_X,y1:FEEDER_Y[0]-14,x2:BUS_X,y2:FEEDER_Y[3]+14,stroke:'var(--line2)','stroke-width':5},svg);
+  const sub = el('g',{},svg);
+  el('rect',{x:38,y:252,width:76,height:56,rx:4,fill:'var(--panel)',stroke:'var(--steel)','stroke-width':1.4},sub);
+  el('text',{x:76,y:276,'text-anchor':'middle',fill:'var(--steel)','font-family':'var(--mono)','font-size':'11px',text:'60/10 kV'},sub);
+  el('text',{x:76,y:292,'text-anchor':'middle',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',text:'PRIMARY'},sub);
+  el('line',{x1:114,y1:280,x2:BUS_X,y2:280,stroke:'var(--line2)','stroke-width':2},svg);
+  // feeders
+  FEEDER_Y.forEach((y,f)=>{
+    el('line',{x1:BUS_X,y1:y,x2:NODE_X[5],y2:y,stroke:'var(--line)','stroke-width':1.6},svg);
+    el('text',{x:BUS_X+18,y:y-13,fill:'var(--faint)','font-family':'var(--mono)','font-size':'10.5px',
+      text:FNAMES[f]+' · trunk cable'},svg);
+  });
+  // transformer nodes: the two-circle one-line symbol
+  for (let a=0;a<24;a++){
+    const {x,y} = assetPos(a);
+    const g = el('g',{class:'node',tabindex:0,role:'button','aria-label':'Transformer T'+String(a+1).padStart(2,'0'),
+      style:'cursor:pointer'},svg);
+    el('circle',{cx:x-4.5,cy:y,r:8.5,fill:'var(--void)','stroke-width':2},g).classList.add('c1');
+    el('circle',{cx:x+4.5,cy:y,r:8.5,fill:'none','stroke-width':2},g).classList.add('c2');
+    el('circle',{cx:x,cy:y,r:17,fill:'none',stroke:'transparent','stroke-width':1.6},g).classList.add('ring');
+    el('text',{x:x,y:y+31,'text-anchor':'middle',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',
+      text:'T'+String(a+1).padStart(2,'0')},g);
+    g.addEventListener('click',()=>{ S.sel=a; renderRail(); paintMap(); });
+    g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault(); S.sel=a; renderRail(); paintMap();}});
+    MAP.nodes.push(g);
   }
-
-  const um=dayMean((()=>{ const m=new Float64Array(N);
-    for(let i=0;i<N;i++){ let s3=0; for(let a=0;a<ASSETS;a++) s3+=U[a][i]; m[i]=s3/ASSETS; } return m; })());
-  let umax=0; for(let dd=0;dd<D;dd++) if(um[dd]>umax) umax=um[dd];
-  g.strokeStyle='#b07d29'; g.lineWidth=1.6; g.beginPath();
-  for(let dd=0;dd<D;dd++){ const py=T+ph*0.72+ph*(1-um[dd]/(umax||1))*0.26;
-    dd?g.lineTo(xd(dd),py):g.moveTo(xd(dd),py); }
-  g.stroke();
-
-  if(shift){ g.strokeStyle='#3c434c'; g.setLineDash([5,4]); g.lineWidth=1.2;
-    g.beginPath(); g.moveTo(x(SHIFT_AT),T); g.lineTo(x(SHIFT_AT),T+ph); g.stroke(); g.setLineDash([]); }
-
-  for(const [i,kind] of s.marks){
-    g.strokeStyle = kind ? '#2f6f4f' : '#a23b28'; g.lineWidth=1.2; g.globalAlpha=.85;
-    g.beginPath(); g.moveTo(x(i),T+ph); g.lineTo(x(i),T+ph-(kind?16:9)); g.stroke();
+  MAP.pins = el('g',{},svg);
+  el('text',{x:NODE_X[5]+55,y:548,'text-anchor':'end',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',
+    text:'click a transformer · colour = actual asset condition (simulation truth) · pins = tickets raised by the selected detector'},svg);
+}
+function healthColor(a){
+  const d=data(), t=S.day;
+  const fd = d.fail_day[String(a)];
+  if (fd!=null && t>=fd) return 'var(--signal)';
+  const m = maxRamp(a); if (m<=0) return 'var(--phosphor)';
+  const r = d.ramp[a][t]/m;
+  if (r<0.08) return 'var(--phosphor)';
+  return r<0.5 ? 'var(--sodium)' : '#F07A45';
+}
+function paintMap(){
+  const d=data(); const tix = ticketsFor(currentArch().key);
+  for (let a=0;a<24;a++){
+    const g=MAP.nodes[a], col=healthColor(a);
+    g.querySelector('.c1').setAttribute('stroke',col);
+    g.querySelector('.c2').setAttribute('stroke',col);
+    const fd = d.fail_day[String(a)];
+    g.classList.toggle('pulse', fd!=null && S.day>=fd);
+    g.querySelector('.ring').setAttribute('stroke', a===S.sel ? 'var(--steel)' : 'transparent');
   }
-  g.globalAlpha=1;
-  g.strokeStyle='#c9c2b8'; g.lineWidth=1; g.strokeRect(L,T,pw,ph);
+  // ticket pins
+  MAP.pins.innerHTML='';
+  for (const aStr in tix){
+    const a=+aStr, {x,y}=assetPos(a);
+    tix[aStr].forEach((td,i)=>{
+      if (td>S.day) return;
+      const age = S.day-td, op = age<20 ? 1 : 0.35;
+      const px = x-10+((i%5)*5), py = y-21;
+      el('polygon',{points:`${px},${py} ${px+7},${py} ${px},${py-9}`,
+        fill: isFault(a)&&td>=(+data().onset[aStr]||1e9)-5 ? 'var(--sodium)' : 'var(--signal)',
+        opacity:op},MAP.pins);
+    });
+  }
+  const clock=$('#clock');
+  let phase='';
+  if (S.scenario==='shift' && S.day>=REGIME) phase = S.day<REGIME+25 ? ' · <span class="warn">HEAT WAVE</span>' : ' · <span class="warn">EV RAMP</span>';
+  else if (S.day<TRAIN) phase=' · calibration';
+  clock.innerHTML='DAY '+String(S.day).padStart(3,'0')+phase;
 }
 
-/* ---------- offline study results ---------- */
-const STUDY = {
- "single threshold":       [0.37,1.00,7.6,0.09,  2.81,1.00,0.0,0.01],
- "multi-method vote":      [0.02,1.00,10.8,0.66, 2.67,1.00,0.0,0.01],
- "vote + persistence":     [0.00,1.00,13.5,0.99, 2.65,1.00,0.0,0.01],
- "vote + uncertainty":     [0.02,1.00,11.8,0.70, 0.83,1.00,61.9,0.04],
- "full sequential gate":   [0.00,1.00,20.8,0.99, 0.53,1.00,79.5,0.07],
- "gate + recalibration":   [null,null,null,null, 0.05,0.41,34.1,0.27]
-};
-function fillExec(){
-  const tb=document.querySelector('#exec tbody');
-  for(const [name,v] of Object.entries(STUDY)){
-    const tr=document.createElement('tr');
-    if(name==='gate + recalibration') tr.className='hl';
-    const cell=(x,i)=>{
-      if(x===null) return '<td style="color:#b9b3aa">&ndash;</td>';
-      if(i===3||i===7) return `<td class="${x>=0.5?'good':(x<=0.05?'bad':'')}">${Math.round(x*100)}%</td>`;
-      if(i===1||i===5) return `<td>${Math.round(x*100)}%</td>`;
-      return `<td>${x.toFixed(x<1?2:1)}</td>`;
-    };
-    tr.innerHTML = `<td>${name}</td>` + v.map(cell).join('');
-    tb.appendChild(tr);
+/* ---------- sparkline helper ---------- */
+function spark(w,h,series,opts){
+  const svg=el('svg',{viewBox:`0 0 ${w} ${h}`});
+  const o=Object.assign({pad:6},opts||{});
+  let lo=Infinity,hi=-Infinity;
+  series.forEach(s=>s.pts.forEach(v=>{ if(v==null)return; if(v<lo)lo=v; if(v>hi)hi=v; }));
+  if (o.lo!=null) lo=Math.min(lo,o.lo); if (o.hi!=null) hi=Math.max(hi,o.hi);
+  if (hi-lo<1e-9) hi=lo+1;
+  const X=t=>o.pad+(w-2*o.pad)*t/(N_DAYS-1), Y=v=>h-o.pad-(h-2*o.pad)*(v-lo)/(hi-lo);
+  if (S.scenario==='shift' && !o.noRegime)
+    el('rect',{x:X(REGIME),y:0,width:2,height:h,fill:'var(--sodium)',opacity:.5},svg);
+  if (!o.noCursor) el('rect',{x:X(0),y:0,width:X(TRAIN)-X(0),height:h,fill:'var(--steel)',opacity:.07},svg);
+  series.forEach(s=>{
+    if (s.band){
+      let up='',dn='';
+      for(let t=0;t<s.pts.length;t++){ if(s.pts[t]==null)continue; up+=`${X(t)},${Y(s.pts[t]+s.band[t])} `; }
+      for(let t=s.pts.length-1;t>=0;t--){ if(s.pts[t]==null)continue; dn+=`${X(t)},${Y(s.pts[t]-s.band[t])} `; }
+      el('polygon',{points:up+dn,fill:s.color,opacity:.13},svg);
+    }
+    let pl='';
+    for(let t=0;t<s.pts.length;t++){ if(s.pts[t]==null)continue; pl+=`${X(t)},${Y(s.pts[t])} `; }
+    el('polyline',{points:pl,fill:'none',stroke:s.color,'stroke-width':s.wd||1.5,opacity:s.op??1,
+      'stroke-dasharray':s.dash||'none'},svg);
+  });
+  (o.hlines||[]).forEach(hl=>{
+    el('line',{x1:o.pad,y1:Y(hl.v),x2:w-o.pad,y2:Y(hl.v),stroke:hl.color,'stroke-width':1,
+      'stroke-dasharray':'4 3',opacity:.75},svg);
+    if(hl.label) el('text',{x:w-o.pad-2,y:Y(hl.v)-4,'text-anchor':'end',fill:hl.color,
+      'font-family':'var(--mono)','font-size':'9.5px',text:hl.label},svg);
+  });
+  (o.marks||[]).forEach(m=>{
+    el('line',{x1:X(m.t),y1:0,x2:X(m.t),y2:h,stroke:m.color,'stroke-width':1,opacity:.8},svg);
+  });
+  if (!o.noCursor) el('line',{x1:X(S.day),y1:0,x2:X(S.day),y2:h,stroke:'var(--bright)','stroke-width':1,opacity:.5},svg);
+  return svg;
+}
+
+/* ---------- the rail ---------- */
+function renderRail(){
+  const a=S.sel, d=data(), rail=$('#rail'); rail.innerHTML='';
+  const id='T'+String(a+1).padStart(2,'0'), f=Math.floor(a/6);
+  const fd=d.fail_day[String(a)], on=d.onset[String(a)];
+  const who=el('div',{class:'who'},rail);
+  el('span',{class:'id',text:id+' · feeder '+FNAMES[f]},who);
+  let tag='HEALTHY', cls='';
+  if (fd!=null && S.day>=fd){tag='DAMAGE'; cls='bad';}
+  else if (isFault(a) && on!=null && S.day>=+on){tag='FAULT DEVELOPING'; cls='hot';}
+  el('span',{class:'tag '+cls,text:tag},who);
+
+  // L1 perceive
+  const cut=(arr)=>arr.map((v,t)=>t<=S.day?v:null);
+  const sg=sigmaOf(a);
+  const l1=el('div',{class:'level'},rail);
+  l1.innerHTML='<div class="lv"><b>L1 · PERCEIVE</b> · hot-spot °C against the model\'s expectation</div>';
+  l1.appendChild(spark(430,96,[
+    {pts:d.pred[a].map((v,t)=>t<=S.day?v:null),band:d.pred[a].map(()=>3*sg),color:'var(--steel)',wd:1,op:.9},
+    {pts:cut(d.hotspot[a]),color:'var(--bright)',wd:1.3},
+  ],{}));
+  const t1=el('div',{class:'note'},l1);
+  t1.innerHTML=`today ${fmt1(d.hotspot[a][S.day])} °C · model expected ${fmt1(d.pred[a][S.day])} ±${fmt1(3*sg)} · load ${d.K[a][S.day]} pu`;
+
+  // L2 comprehend
+  const b=BUDGETS[S.bIdx];
+  const l2=el('div',{class:'level'},rail);
+  l2.innerHTML='<div class="lv"><b>L2 · COMPREHEND</b> · standardised residual, evidence, doubt</div>';
+  const l2hi=Math.max(8,b+2);
+  l2.appendChild(spark(430,96,[
+    {pts:cut(d.cus[a].map(v=>Math.min(v/3,l2hi))),color:'var(--sodium)',wd:1,op:.85},
+    {pts:cut(d.z[a]),color:'var(--phosphor)',wd:1.2},
+  ],{hlines:[{v:b,color:'var(--signal)',label:'alarm z='+b}],lo:-3,hi:l2hi}));
+  const zt=d.z[a][S.day], ct=d.cus[a][S.day], uh=d.unc_hi[a][S.day];
+  const t2=el('div',{class:'note'},l2);
+  t2.innerHTML = ct>3*b
+    ? `z = ${zt.toFixed(1)} · <em>evidence far past the ticket line</em> (needs ${(3*b).toFixed(0)}, holds ${ct>999?'999+':ct.toFixed(0)})`
+    : `z = ${zt.toFixed(1)} · accumulated evidence ${ct.toFixed(0)} of ${(3*b).toFixed(0)} needed`+(zt>b?' · <em>over threshold</em>':'');
+  const env=el('div',{class:'envelope'+(uh?' show':'')},l2);
+  env.textContent='OUTSIDE TRAINING ENVELOPE · ensemble disagrees · vote requirement raised';
+
+  // L3 project
+  const l3=el('div',{class:'level'},rail);
+  l3.innerHTML='<div class="lv"><b>L3 · PROJECT</b> · where this is heading</div>';
+  const wb=RS.cables.weibull;
+  const ticketDays=(ticketsFor(currentArch().key)[String(a)]||[]).filter(t=>t<=S.day);
+  if (fd!=null && S.day>=fd){
+    l3.appendChild(spark(430,96,[{pts:cut(d.z[a]),color:'var(--signal)',wd:1.2}],
+      {hlines:[{v:10,color:'var(--signal)',label:'damage'}],lo:-2,hi:12,marks:[{t:fd,color:'var(--signal)'}]}));
+    const t3=el('div',{class:'note'},l3);
+    t3.innerHTML = ticketDays.length && ticketDays[0]<fd
+      ? `damage reached on day ${fd}. This detector's first ticket came on day ${ticketDays[0]}, <em>${fd-ticketDays[0]} days early</em>. The projection's job ended there.`
+      : `damage reached on day ${fd}. <em>This detector never ticketed ${id} in time.</em> Switch architectures to see who did.`;
+  } else if (ticketDays.length && zt>1){
+    // straight-line extrapolation of recent z toward damage, with a doubt fan
+    const t0=Math.max(TRAIN,S.day-20);
+    const slope=(d.z[a][S.day]-d.z[a][t0])/Math.max(1,S.day-t0);
+    const zdmg=10;
+    const eta = slope>0.01 ? Math.round((zdmg-zt)/slope) : null;
+    const proj=[],projHi=[],projLo=[];
+    for(let t=0;t<N_DAYS;t++){
+      if(t<S.day){proj.push(null);projHi.push(0);projLo.push(0);}
+      else {const dz=slope*(t-S.day); proj.push(Math.min(zdmg+2,zt+dz)); projHi.push(dz*.5); projLo.push(dz*.5);}
+    }
+    l3.appendChild(spark(430,96,[
+      {pts:cut(d.z[a]),color:'var(--phosphor)',wd:1.1,op:.6},
+      {pts:proj,band:projHi,color:'var(--sodium)',wd:1.4,dash:'5 3'},
+    ],{hlines:[{v:zdmg,color:'var(--signal)',label:'damage'}],lo:-2,hi:zdmg+2}));
+    const t3=el('div',{class:'note'},l3);
+    t3.innerHTML = eta && eta<200
+      ? `straight-line projection reaches damage in about <em>${eta} days</em>. The fan is the doubt; a straight line is an assumption, and the page says so.`
+      : 'evidence present but the trend is too flat to date the damage. Keep watching.';
+  } else {
+    const km=kMean(a), scl=wb.scale*Math.pow(km/0.7,-0.9);
+    const pts=[],ages=[];
+    for(let t=0;t<N_DAYS;t++){const age=60*t/(N_DAYS-1); ages.push(age); pts.push(Math.exp(-Math.pow(age/scl,wb.shape)));}
+    const med=scl*Math.pow(Math.LN2,1/wb.shape);
+    l3.appendChild(spark(430,96,[{pts:pts,color:'var(--steel)',wd:1.4}],
+      {noRegime:true,noCursor:true,hlines:[{v:.5,color:'var(--faint)',label:'median '+fmt1(med)+' y'}],lo:0,hi:1}));
+    const t3=el('div',{class:'note'},l3);
+    t3.innerHTML=`no active evidence on ${id}. Cohort survival for its loading (K̄ ${km.toFixed(2)} pu): median life ${fmt1(med)} years. Censoring-aware, from study 3.`;
   }
 }
 
-document.getElementById('run').addEventListener('click',run);
-document.getElementById('sev').addEventListener('input',e=>
-  document.getElementById('sevv').textContent=(+e.target.value).toFixed(2)+'×');
-document.getElementById('noise').addEventListener('input',e=>
-  document.getElementById('noisev').textContent=(+e.target.value).toFixed(2)+'×');
-document.getElementById('shift').addEventListener('change',e=>
-  document.getElementById('shiftv').textContent=e.target.value==='1'?'on':'off');
-fillExec();
-run();
+/* ---------- verdict tiles ---------- */
+function renderVerdicts(){
+  const arch=currentArch(); const r=RS[S.scenario][rsLabel(arch)][bKey()];
+  const v=$('#verdicts'); v.innerHTML='';
+  const mk=(cls,k,n,s)=>{const t=el('div',{class:'tile '+cls},v);
+    t.innerHTML=`<div class="k">${k}</div><div class="n">${n}</div><div class="s">${s}</div>`;};
+  const det=r.detected, of=r.of;
+  mk(det>=2.9?'good':det>=2?'mid':'bad','faults caught · 5-run mean',
+    `${det.toFixed(1)}<small> of ${of}</small>`,
+    det>=2.9 ? 'Every developing fault produced a ticket before damage.' :
+    det>=2 ? 'A fault is slipping through. The map shows which one.' :
+    'This architecture leaves faults unseen until damage.');
+  mk(r.warning_days>=15?'good':'mid','median warning before damage',
+    `${fmt1(r.warning_days)}<small> days</small>`,
+    r.warning_days>=15 ? 'Enough notice to plan an outage instead of suffering one.' :
+    'Late notice: the crew reacts instead of planning.');
+  const fa=r.fa_per_month;
+  mk(fa<1?'good':fa<5?'mid':'bad','false call-outs · fleet per month',
+    fmt1(fa),
+    fa<1 ? `A crew can live with this. Precision ${(r.precision*100).toFixed(0)}%: tickets mean something.` :
+    fa<5 ? `Roughly one wasted drive a week. Precision ${(r.precision*100).toFixed(0)}%.` :
+    `At ${fmt1(fa)} wasted call-outs a month the queue stops being read. Precision ${(r.precision*100).toFixed(0)}%.`);
+}
+
+/* ---------- work orders ---------- */
+function whyText(archKey,a,td){
+  const d=data();
+  if (archKey==='naive') return 'temperature above the commissioning limit';
+  const z=d.z[a][td], uh=d.unc_hi[a][td];
+  let s=`hot-spot ${z.toFixed(1)}σ over forecast`;
+  if (archKey!=='single') s+=', methods agree';
+  if (archKey==='seq'||archKey==='recal') s+=`, evidence sustained`;
+  if (uh) s+=' · flagged: outside training envelope';
+  return s;
+}
+function renderOrders(){
+  const arch=currentArch(); const tix=ticketsFor(arch.key); const d=data();
+  const rows=[];
+  for (const aStr in tix) for (const td of tix[aStr]){
+    if (td<TRAIN) continue;
+    const a=+aStr;
+    const real=isFault(a) && td>=(+d.onset[aStr])-5;
+    rows.push({td,a,real});
+  }
+  rows.sort((x,y)=>x.td-y.td);
+  const list=$('#orderlist'); list.innerHTML='';
+  let shown=0, realN=0;
+  rows.forEach((r,i)=>{
+    const row=el('div',{class:'orow'+(r.td>S.day?' future':'')},list);
+    row.innerHTML=`<span class="d">day ${String(r.td).padStart(3,'0')}</span>`+
+      `<span class="a">T${String(r.a+1).padStart(2,'0')} · ${FNAMES[Math.floor(r.a/6)]}</span>`+
+      `<span class="why">${whyText(arch.key,r.a,r.td)}</span>`+
+      `<span class="h ${r.real?'real':'false'}">${r.real?'hindsight: real fault':'hindsight: healthy'}</span>`;
+    if (r.td<=S.day){shown++; if(r.real)realN++;}
+  });
+  if (!rows.length) list.innerHTML='<div class="empty-orders">No tickets at this budget. Silence is also a decision: check the map for amber assets it is ignoring.</div>';
+  $('#ordercount').textContent=`${shown} raised by day ${S.day} · ${realN} on genuinely sick assets · full run listed, future rows dimmed`;
+}
+
+/* ---------- studies ---------- */
+function barChart(rows, maxFA, maxW){
+  const w=980, rh=44, h=rows.length*rh+30;
+  const svg=el('svg',{viewBox:`0 0 ${w} ${h}`});
+  const lw=250, half=(w-lw-96)/2;
+  el('text',{x:lw+half/2,y:14,'text-anchor':'middle',class:'axis',text:'false call-outs · fleet / month'},svg);
+  el('text',{x:lw+half+56+half/2,y:14,'text-anchor':'middle',class:'axis',text:'median warning · days before damage'},svg);
+  rows.forEach((r,i)=>{
+    const y=30+i*rh;
+    el('text',{x:lw-10,y:y+17,'text-anchor':'end',class:'barlbl',text:r.label},svg);
+    if (r.note) el('text',{x:lw-10,y:y+30,'text-anchor':'end',class:'axis',fill:'var(--faint)',text:r.note},svg);
+    const bw=Math.max(2,half*r.fa/maxFA);
+    el('rect',{x:lw,y:y+6,width:bw,height:14,rx:2,fill:r.faColor||'var(--sodium)'},svg);
+    el('text',{x:lw+bw+7,y:y+17,class:'barnum',text:fmt1(r.fa)},svg);
+    const bw2=Math.max(2,half*r.warn/maxW);
+    el('rect',{x:lw+half+56,y:y+6,width:bw2,height:14,rx:2,fill:'var(--phosphor)',opacity:r.dim?0.45:1},svg);
+    const missed=r.det!=null && r.det<2.9;
+    el('text',{x:lw+half+56+bw2+7,y:y+17,class:'barnum',text:fmt1(r.warn)},svg);
+    if (missed) el('text',{x:lw+half+56,y:y+33,class:'axis',fill:'var(--signal)',
+      text:'catches only '+r.det.toFixed(1)+' of 3 faults'},svg);
+  });
+  return svg;
+}
+function renderStudies(){
+  const get=(sc,lbl)=>RS[sc][lbl][String(META.default_budget)];
+  // study 1
+  const s1=$('#study1'); s1.innerHTML='<h3>Study 1 · What each layer of discipline buys</h3>'+
+    '<p class="q">Quiet season, five seeded runs, threshold z='+META.default_budget+'. Each architecture adds one idea from the centre\'s papers on top of the last.</p>';
+  const order=[['static limit',''],['forecaster residual','learn expected behaviour'],['multi-method vote','agreement before alarm'],
+    ['vote + uncertainty weighting','doubt raises the bar'],['full sequential gate','sustained evidence only']];
+  let rows=order.map(([lbl,note])=>{const r=get('stationary',lbl);
+    return {label:lbl,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected};});
+  const maxFA=Math.max(...rows.map(r=>r.fa))*1.15;
+  s1.appendChild(barChart(rows,maxFA,30));
+  const g1=get('stationary','full sequential gate'), n1=get('stationary','static limit'), f1=get('stationary','forecaster residual');
+  el('div',{class:'verdict'},s1).innerHTML=
+    `The static limit misses a fault and still wastes ${fmt1(n1.fa_per_month)} call-outs a month. The full gate catches
+     <b>3 of 3 at ${fmt1(g1.fa_per_month)} false call-outs a month</b> (precision ${(g1.precision*100).toFixed(0)}%),
+     and pays for that silence with ${fmt1(f1.warning_days-g1.warning_days)} days of warning. That trade, alarms against
+     lead time, is the whole game; the slider above moves you along it.`;
+  // study 2
+  const s2=$('#study2'); s2.innerHTML='<h3>Study 2 · The day the world changed</h3>'+
+    '<p class="q">Same fleet, but a heat wave lands on day 180 and EV charging grows from there. The models were trained on a world that no longer exists.</p>';
+  const order2=order.concat([['sequential gate + rolling recalibration','retrain weekly on the trailing month']]);
+  let rows2=order2.map(([lbl,note])=>{const r=get('shift',lbl);
+    return {label:lbl===('sequential gate + rolling recalibration')?'gate + weekly retraining':lbl,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected,
+      faColor: lbl.includes('recalibration')?'var(--signal)':undefined};});
+  s2.appendChild(barChart(rows2,Math.max(...rows2.map(r=>r.fa))*1.15,30));
+  const n2=get('shift','static limit'), g2=get('shift','full sequential gate'), r2=get('shift','sequential gate + rolling recalibration');
+  el('div',{class:'verdict sting'},s2).innerHTML=
+    `The static limit floods: ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}% precision.
+     The fixed gate holds at ${fmt1(g2.fa_per_month)}. Weekly retraining looks best of all,
+     ${fmt1(r2.fa_per_month)} false call-outs and ${(r2.precision*100).toFixed(0)}% precision, and it is the only
+     architecture that <b>misses the slow fault: ${r2.detected.toFixed(1)} of 3 caught</b>. T22's decay grew slower than
+     the retraining cadence, so every retrain absorbed a little more of it into "normal", and every redeploy restarted
+     the evidence accumulator. The cleanest queue on the board belongs to the detector that cannot see the slowest fault.
+     In the run drawn on the map above, the fixed gate tickets T22 on day 197, 43 days before damage; the retrained
+     detector never does.`;
+  // study 3
+  const c=RS.cables;
+  const s3=$('#study3'); s3.innerHTML='<h3>Study 3 · When do you replace the cable?</h3>'+
+    `<p class="q">${c.n} MV cable sections observed for 25 years; ${c.n_failures} failed in view, ${c.n_censored} were
+     still alive or preventively replaced (censored). The question is what to do with the ones you never saw die.</p>`;
+  const w=980,h=230,pad=46;
+  const svg=el('svg',{viewBox:`0 0 ${w} ${h}`},s3);
+  const X=t=>pad+(w-2*pad)*t/60, Y=s=>18+(h-58)*(1-s);
+  el('line',{x1:pad,y1:Y(0),x2:w-pad,y2:Y(0),stroke:'var(--line2)'},svg);
+  [0,10,20,30,40,50,60].forEach(t=>el('text',{x:X(t),y:h-18,'text-anchor':'middle',class:'axis',text:t+'y'},svg));
+  el('text',{x:pad,y:12,class:'axis',text:'share of cohort still alive'},svg);
+  let km='M'+X(0)+','+Y(1); let last=1;
+  c.km_curve.forEach(([t,s])=>{ km+=` L${X(t)},${Y(last)} L${X(t)},${Y(s)}`; last=s; });
+  el('path',{d:km,fill:'none',stroke:'var(--phosphor)','stroke-width':2},svg);
+  let wbp='';
+  for(let t=0;t<=60;t+=1){const s=Math.exp(-Math.pow(t/c.weibull.scale,c.weibull.shape)); wbp+=`${X(t)},${Y(s)} `;}
+  el('polyline',{points:wbp,fill:'none',stroke:'var(--steel)','stroke-width':1.4,'stroke-dasharray':'6 4'},svg);
+  el('line',{x1:X(c.naive_mean),y1:Y(1),x2:X(c.naive_mean),y2:Y(0),stroke:'var(--signal)','stroke-width':1.6,'stroke-dasharray':'3 3'},svg);
+  el('text',{x:X(c.naive_mean)+6,y:Y(.92),class:'barnum',fill:'var(--signal)',text:'naive: "cables die at '+fmt1(c.naive_mean)+'"'},svg);
+  el('text',{x:X(c.km_median)+6,y:Y(.5)-6,class:'barnum',fill:'var(--phosphor)',text:'Kaplan-Meier median '+fmt1(c.km_median)+' y'},svg);
+  el('text',{x:X(28)+6,y:Y(.13),class:'axis',text:'Weibull fit: shape '+c.weibull.shape.toFixed(1)+', scale '+c.weibull.scale.toFixed(0)+' y'},svg);
+  const ro=c.rule_oldest, rh2=c.rule_hazard;
+  el('div',{class:'verdict'},s3).innerHTML=
+    `Averaging only the cables you watched die says the fleet dies at ${fmt1(c.naive_mean)} years; the censoring-aware
+     curve puts the median at <b>${fmt1(c.km_median)} years</b>. The bias is not academic: with the same budget of
+     ${c.budget} replacements over ten years, replace-the-oldest prevents ${ro.prevented} failures and wastes
+     ${ro.wasted} good cables, while ranking by fitted hazard (age and loading together) prevents
+     <b>${rh2.prevented} failures</b> and wastes ${rh2.wasted}. Same money, ${ro.in_service_failures-rh2.in_service_failures}
+     fewer in-service failures, purely from respecting what the censored data does and does not say.`;
+}
+
+/* ---------- provenance ---------- */
+const PROV=[
+ {what:'Residual detectors trained on healthy operation only, because faults are rare and unlabelled',
+  src:[['sh','Shaker et al. 2026','Multi-method fault detection considering uncertainty through MC dropout, Energy & Buildings'],
+       ['fd','the premise','fault detection without fault labels: model normal, alarm on departure']]},
+ {what:'Several different residual generators vote before anything is called a fault',
+  src:[['sh','Shaker et al. 2026','the enhanced-voting architecture this demo\'s vote stage copies'],
+       ['fd','ensemble tradition','diverse errors cancel; agreement is evidence']]},
+ {what:'When the ensemble disagrees, the vote requirement is raised, not silenced',
+  src:[['sh','Shaker group 2026','probabilistic overload alarms: epistemic vs aleatoric uncertainty, Sust. Energy Grids & Netw.'],
+       ['fd','Gal & Ghahramani 2016','MC dropout as Bayesian approximation; here: bootstrap-ensemble disagreement stands in']]},
+ {what:'A ticket needs sustained evidence, not one bad day: CUSUM before the queue',
+  src:[['sh','Shaker group 2024-2025','alarm significance (IEEE TII 2024), TFT alarm forecasting at a Danish DSO'],
+       ['fd','Page 1954; Roberts 1959','CUSUM and EWMA, the sequential-evidence canon']]},
+ {what:'The alarm budget is set in crew call-outs per month, and everything else follows from it',
+  src:[['sh','Shaker group 2025','consequence-aware prescriptive maintenance, IEEE Trans. Smart Grid: crews are finite'],
+       ['fd','alarm fatigue','a queue nobody reads is a detector nobody has']]},
+ {what:'Every ticket carries its reason in plain words',
+  src:[['sh','Shaker group 2025','XAI for energy maintenance review, Renew. Sust. Energy Rev.: operators cannot act on black boxes'],
+       ['fd','Lundberg & Lee 2017; Ribeiro et al. 2016','SHAP and LIME, the attribution canon']]},
+ {what:'Cable life is read through censoring-aware survival curves, not averages of observed deaths',
+  src:[['sh','Shaker group 2026','survival models for PdM and RUL in smart energy networks, Sensors review'],
+       ['sh','Mortensen & Shaker 2025','neural Weibull proportional hazards for cable replacement under data deficiency, IEEE Access'],
+       ['fd','Kaplan & Meier 1958; Cox 1972; Weibull 1951','with Ishwaran 2008 and Katzman 2018 as the learned extensions']]},
+ {what:'The whole page is a small digital twin: a simulated network used to interrogate operating decisions',
+  src:[['bj','Jørgensen group 2024','digital-twin framework for simulating DER in distribution grids, Energies'],
+       ['bj','Jørgensen group 2021','the building-level twin the framework grew from, Energy Informatics']]},
+ {what:'The asset panel is organised as perceive / comprehend / project',
+  src:[['bj','Jørgensen & Ma 2026','Infostructure: situation awareness in future power system control rooms, Energies'],
+       ['fd','Endsley 1995','the three-level model of situation awareness']]},
+ {what:'Detection stages are sequential and non-compensable: no later score can buy back a failed gate',
+  src:[['bj','Ma, Cong & Jørgensen 2026','deployment feasibility as a layered construct: sequential gates, not compensatory scoring, Energies'],
+       ['fd','the demo\'s reading','a ticket must pass vote, doubt and persistence in order']]},
+ {what:'Retraining cadence is treated as a first-class design variable, with a cost',
+  src:[['bj','Jørgensen group 2026','MLOps platform capability mapping for energy forecasting, Information'],
+       ['fd','Gama et al. 2014','concept drift: adapt too fast and slow faults become the new normal']]},
+ {what:'District heating is the stated next domain for exactly this machinery',
+  src:[['sh','Shaker group 2023-2026','anomaly indexing for DH decision support; DH predictive maintenance review; DH asset management pathways'],
+       ['fd','kept out of this page','one grid, readable; the methods carry over']]},
+];
+function renderProv(){
+  const p=$('#provcards');
+  PROV.forEach(c=>{
+    const card=el('div',{class:'card'},p);
+    card.innerHTML='<div class="what">'+c.what+'</div>'+
+      c.src.map(([cls,who,what])=>`<div class="src"><span class="who-tag ${cls}">${cls==='sh'?'Shaker':cls==='bj'?'Jørgensen':'foundation'}</span><b>${who}</b> · ${what}</div>`).join('');
+  });
+}
+
+/* ---------- controls ---------- */
+function renderArchChips(){
+  const box=$('#arch-chips'); box.innerHTML='';
+  ARCHS.forEach(a=>{
+    if (!archAvailable(a)) return;
+    const c=el('button',{class:'chip'+(currentArch().key===a.key?' on':''),text:a.label},box);
+    c.addEventListener('click',()=>{S.arch=a.key; refresh();});
+  });
+}
+function refresh(){
+  document.querySelectorAll('#scenario-chips .chip').forEach(x=>
+    x.classList.toggle('on', x.dataset.scenario===S.scenario));
+  const sc=$('#scrubber');
+  sc.style.background = S.scenario==='shift'
+    ? `linear-gradient(90deg, var(--line) 0%, var(--line) ${REGIME/(N_DAYS-1)*100}%, var(--sodium) ${REGIME/(N_DAYS-1)*100}%, var(--sodium) ${REGIME/(N_DAYS-1)*100+0.8}%, var(--line) ${REGIME/(N_DAYS-1)*100+0.8}%)`
+    : 'var(--line)';
+  renderArchChips();
+  $('#budget-val').textContent='ticket at z > '+bKey();
+  paintMap(); renderRail(); renderVerdicts(); renderOrders();
+}
+function setDay(d){ S.day=Math.max(0,Math.min(N_DAYS-1,d)); $('#scrubber').value=S.day; paintMap(); renderRail(); renderOrders(); }
+
+let rafId=null,lastT=0,acc=0;
+function tick(ts){
+  if(!S.playing) return;
+  if(lastT) { acc+=(ts-lastT)/1000*16; if(acc>=1){ setDay(S.day+Math.floor(acc)); acc%=1; } }
+  lastT=ts;
+  if (S.day>=N_DAYS-1){ S.playing=false; $('#playbtn').innerHTML='&#9654;'; return; }
+  rafId=requestAnimationFrame(tick);
+}
+$('#playbtn').addEventListener('click',()=>{
+  S.playing=!S.playing; lastT=0;
+  $('#playbtn').innerHTML=S.playing?'&#10073;&#10073;':'&#9654;';
+  if(S.playing){ if(S.day>=N_DAYS-1) setDay(0); rafId=requestAnimationFrame(tick); }
+});
+$('#scrubber').addEventListener('input',e=>{ S.playing=false; $('#playbtn').innerHTML='&#9654;'; setDay(+e.target.value); });
+document.querySelectorAll('#scenario-chips .chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('#scenario-chips .chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    S.scenario=c.dataset.scenario;
+    refresh();
+  });
+});
+
+/* budget slider: index 0 (left, strict) .. 5 (right, loose); BUDGETS is [3.6..2.0] strict->loose.
+   slider value v: 0=strict; map S.bIdx = v. Fix mapping: */
+$('#budget').max=String(BUDGETS.length-1);
+$('#budget').value='2';
+$('#budget').addEventListener('input',e=>{ S.bIdx=+e.target.value; refresh(); },{once:false});
+
+buildMap();
+renderProv();
+renderStudies();
+setDay(N_DAYS-1);
+refresh();
+})();

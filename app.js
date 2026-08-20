@@ -161,7 +161,7 @@ function spark(w,h,series,opts){
   (o.hlines||[]).forEach(hl=>{
     el('line',{x1:o.pad,y1:Y(hl.v),x2:w-o.pad,y2:Y(hl.v),stroke:hl.color,'stroke-width':1,
       'stroke-dasharray':'4 3',opacity:.75},svg);
-    if(hl.label) el('text',{x:w-o.pad-2,y:Y(hl.v)-4,'text-anchor':'end',fill:hl.color,
+    if(hl.label) el('text',{x:o.pad+2,y:Y(hl.v)-4,'text-anchor':'start',fill:hl.color,
       'font-family':'var(--mono)','font-size':'9.5px',text:hl.label},svg);
   });
   (o.marks||[]).forEach(m=>{

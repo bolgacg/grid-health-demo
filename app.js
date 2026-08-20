@@ -13,6 +13,7 @@ const ARCHS = [
   {key:'gated',  label:'vote + uncertainty weighting'},
   {key:'seq',    label:'full sequential gate'},
   {key:'recal',  label:'gate + weekly retraining', rsLabel:'sequential gate + rolling recalibration', shiftOnly:true},
+  {key:'pair',   label:'paired: baseline + retrained', rsLabel:'paired: frozen-baseline gate + retrained gate', shiftOnly:true},
 ];
 const rsLabel = a => a.rsLabel || a.label;
 
@@ -378,21 +379,27 @@ function renderStudies(){
   // study 2
   const s2=$('#study2'); s2.innerHTML='<h3>Study 2 · Behaviour under a regime change</h3>'+
     '<p class="q">The same fleet, with a heat wave arriving on day 180 and electric-vehicle charging growing thereafter. The training data no longer describes the operating conditions.</p>';
-  const order2=order.concat([['sequential gate + rolling recalibration','retrained weekly']]);
+  const order2=order.concat([['sequential gate + rolling recalibration','retrained weekly'],
+    ['paired: frozen-baseline gate + retrained gate','the deployable design']]);
   let rows2=order2.map(([lbl,note])=>{const r=get('shift',lbl);
-    return {label:lbl===('sequential gate + rolling recalibration')?'gate + weekly retraining':lbl,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected,
-      faColor: lbl.includes('recalibration')?'var(--signal)':undefined};});
+    let short=lbl; if(lbl.includes('recalibration')) short='gate + weekly retraining';
+    if(lbl.startsWith('paired')) short='paired: baseline + retrained';
+    return {label:short,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected,
+      faColor: lbl.includes('recalibration')?'var(--signal)': lbl.startsWith('paired')?'var(--phosphor)':undefined};});
   s2.appendChild(barChart(rows2,Math.max(...rows2.map(r=>r.fa))*1.15,30));
-  const n2=get('shift','static limit'), g2=get('shift','full sequential gate'), r2=get('shift','sequential gate + rolling recalibration');
+  const n2=get('shift','static limit'), g2=get('shift','full sequential gate'), r2=get('shift','sequential gate + rolling recalibration'), p2=get('shift','paired: frozen-baseline gate + retrained gate');
   el('div',{class:'verdict sting'},s2).innerHTML=
-    `<b>Frequent retraining hides slow faults: the cleanest-looking detector is the one that misses the creeping failure.</b> The static limit degrades to ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}%
-     precision. The fixed sequential gate holds at ${fmt1(g2.fa_per_month)}. Weekly retraining appears strongest of all,
-     ${fmt1(r2.fa_per_month)} false call-outs at ${(r2.precision*100).toFixed(0)}% precision, and it is the only
-     architecture that <b>misses the slow fault, detecting ${r2.detected.toFixed(1)} of 3</b>. T22's degradation advanced
-     more slowly than the retraining cadence, so each refit absorbed part of it into the estimated normal state, and
-     each redeployment restarted the evidence accumulator. In the run drawn above, the fixed gate tickets T22 on day
-     197, 43 days before damage; the retrained detector never does. The architecture with the cleanest record is the
-     one that cannot see the slowest fault.`;
+    `<b>Retraining is necessary after a regime change, and unsafe on its own: it hides slow faults. The remedy is
+     measured here too.</b> The static limit degrades to ${fmt1(n2.fa_per_month)} false call-outs a month at
+     ${(n2.precision*100).toFixed(0)}% precision. Weekly retraining appears strongest of all, ${fmt1(r2.fa_per_month)}
+     false call-outs at ${(r2.precision*100).toFixed(0)}% precision, and it is the only architecture that misses the
+     slow fault, detecting ${r2.detected.toFixed(1)} of 3: T22's degradation advanced more slowly than the retraining
+     cadence, so each refit absorbed part of it into the estimated normal state, and each redeployment restarted the
+     evidence accumulator. The handling is not to avoid retraining but to <b>never let the retrained model replace the
+     frozen baseline: run both and alarm on either</b>. The paired design detects ${p2.detected.toFixed(0)} of 3,
+     including T22 on day 197, 43 days before damage, at ${fmt1(p2.fa_per_month)} false call-outs a month, essentially
+     the fixed gate's alarm load. Two further disciplines follow from the mechanism: carry accumulated evidence across
+     redeployments instead of resetting it, and exclude assets under open investigation from the retraining window.`;
   // study 3
   const c=RS.cables;
   const s3=$('#study3'); s3.innerHTML='<h3>Study 3 · Cable replacement under censored lifetimes</h3>'+
@@ -566,9 +573,10 @@ refresh();
     {sel:'#study2', k:'The finding · 7 of 8', html:
       `The headline result: a plain threshold catches ${n1.detected.toFixed(0)} of 3 faults and raises `+
       `${Math.round(n1.fa_per_month)} false alarms a month; the full gated design catches all 3 with almost none `+
-      `(precision ${(g1.precision*100).toFixed(0)}%). Then the twist: retraining the model weekly looks cleanest `+
-      `of all, and it is the only design that <b>misses the slow fault</b> (${r2.detected.toFixed(1)} of 3), `+
-      `because each retrain quietly learns the fault as the new normal.`},
+      `(precision ${(g1.precision*100).toFixed(0)}%). The twist: retraining weekly looks cleanest of all yet `+
+      `<b>misses the slow fault</b> (${r2.detected.toFixed(1)} of 3), because each retrain quietly learns the fault `+
+      `as the new normal. The remedy is also measured: keep the original model running beside the retrained one `+
+      `and alarm on either; the pair catches everything at nearly the same alarm load.`},
     {sel:'#provenance .prov', k:'Provenance · 8 of 8', html:
       `Every mechanism is mapped here to the centre publication it came from and the foundational `+
       `work behind it. That is the whole page. Explore freely; the Guided tour button at the top `+

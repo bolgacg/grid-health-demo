@@ -66,7 +66,7 @@ def main():
     results = {}
     keep_tl = {}
     for scenario in ['stationary', 'shift']:
-        agg = {a: {b: [] for b in BUDGETS} for a in list(ARCH)+ (['recal'] if scenario=='shift' else [])}
+        agg = {a: {b: [] for b in BUDGETS} for a in list(ARCH)+ (['recal','pair'] if scenario=='shift' else [])}
         for seed in SEEDS:
             s = sim.simulate(scenario, seed)
             st = build_stats(s, seed)
@@ -77,6 +77,7 @@ def main():
                 mats = alarms(st, b, s)
                 if scenario == 'shift':
                     mats['recal'] = cus_r > 3.0*b
+                    mats['pair'] = mats['seq'] | mats['recal']
                 for arch, alarm in mats.items():
                     tix = detect.tickets_from_alarm(alarm)
                     agg[arch][b].append(detect.score(tix, s['fault_assets'], s['onset'],
@@ -84,7 +85,8 @@ def main():
             if seed == 0:
                 keep_tl[scenario] = (s, st, (zr if scenario=='shift' else None),
                                      (segs if scenario=='shift' else None))
-        label = dict(ARCH, recal='sequential gate + rolling recalibration')
+        label = dict(ARCH, recal='sequential gate + rolling recalibration',
+                     pair='paired: frozen-baseline gate + retrained gate')
         results[scenario] = {label[a]: {str(b): {k: round(float(np.mean([r[k] for r in runs])),3)
                              for k in runs[0]} for b, runs in per_b.items()}
                              for a, per_b in agg.items()}
@@ -101,7 +103,9 @@ def main():
         tickets = {}
         for b in BUDGETS:
             mats = alarms(st, b, s)
-            if zr is not None: mats['recal'] = segmented_cusum(zr, zsegs) > 3.0*b
+            if zr is not None:
+                mats['recal'] = segmented_cusum(zr, zsegs) > 3.0*b
+                mats['pair'] = mats['seq'] | mats['recal']
             tickets[str(b)] = {a: detect.tickets_from_alarm(m) for a, m in mats.items()}
         tl[scenario] = dict(
             ambient=[round(float(x),1) for x in s['ambient']],

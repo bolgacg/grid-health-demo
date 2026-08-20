@@ -92,8 +92,29 @@ function buildMap(){
     MAP.nodes.push(g);
   }
   MAP.pins = el('g',{},svg);
-  el('text',{x:NODE_X[5]+55,y:548,'text-anchor':'end',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',
-    text:'Click a transformer to inspect it. Colour shows the true asset condition; markers show tickets from the selected architecture.'},svg);
+  // legend
+  const leg = el('g',{},svg);
+  const items = [
+    ['node','var(--phosphor)','healthy'],
+    ['node','var(--sodium)','fault developing'],
+    ['node','var(--signal)','damage'],
+    ['pin','var(--amber-bright)','ticket (correct)'],
+    ['pin','var(--signal)','ticket (false alarm)'],
+  ];
+  let lx = 150;
+  items.forEach(([kind,col,label])=>{
+    if (kind==='node'){
+      el('circle',{cx:lx,cy:540,r:5.5,fill:'none',stroke:col,'stroke-width':2},leg);
+      lx += 12;
+    } else {
+      el('polygon',{points:`${lx-4},544 ${lx+4},544 ${lx-4},534`,fill:col},leg);
+      lx += 10;
+    }
+    const t = el('text',{x:lx,y:544,fill:'var(--dim)','font-family':'var(--mono)','font-size':'10.5px',text:label},leg);
+    lx += label.length*6.6 + 26;
+  });
+  el('text',{x:lx,y:544,fill:'var(--faint)','font-family':'var(--mono)','font-size':'10.5px',
+    text:'· click to inspect'},leg);
 }
 function healthColor(a){
   const d=data(), t=S.day;
@@ -187,7 +208,7 @@ function renderRail(){
   const cut=(arr)=>arr.map((v,t)=>t<=S.day?v:null);
   const sg=sigmaOf(a);
   const l1=el('div',{class:'level'},rail);
-  l1.innerHTML='<div class="lv"><b>Level 1 · Perception</b> · hot-spot temperature against the model\'s expectation</div>';
+  l1.innerHTML='<div class="lv"><b>Level 1 · Perception</b> · what the sensors show: temperature against the model\'s expectation</div>';
   l1.appendChild(spark(430,96,[
     {pts:d.pred[a].map((v,t)=>t<=S.day?v:null),band:d.pred[a].map(()=>3*sg),color:'var(--steel)',wd:1,op:.9},
     {pts:cut(d.hotspot[a]),color:'var(--bright)',wd:1.3},
@@ -198,7 +219,7 @@ function renderRail(){
   // L2 comprehend
   const b=BUDGETS[S.bIdx];
   const l2=el('div',{class:'level'},rail);
-  l2.innerHTML='<div class="lv"><b>Level 2 · Comprehension</b> · standardised residual, accumulated evidence, uncertainty</div>';
+  l2.innerHTML='<div class="lv"><b>Level 2 · Comprehension</b> · what the detector concludes: unusualness (z), accumulated evidence, uncertainty</div>';
   const l2hi=Math.max(8,b+2);
   l2.appendChild(spark(430,96,[
     {pts:cut(d.cus[a].map(v=>Math.min(v/3,l2hi))),color:'var(--sodium)',wd:1,op:.85},
@@ -214,7 +235,7 @@ function renderRail(){
 
   // L3 project
   const l3=el('div',{class:'level'},rail);
-  l3.innerHTML='<div class="lv"><b>Level 3 · Projection</b> · expected trajectory</div>';
+  l3.innerHTML='<div class="lv"><b>Level 3 · Projection</b> · where this is heading</div>';
   const wb=RS.cables.weibull;
   const ticketDays=(ticketsFor(currentArch().key)[String(a)]||[]).filter(t=>t<=S.day);
   if (fd!=null && S.day>=fd){
@@ -350,7 +371,7 @@ function renderStudies(){
   s1.appendChild(barChart(rows,maxFA,30));
   const g1=get('stationary','full sequential gate'), n1=get('stationary','static limit'), f1=get('stationary','forecaster residual');
   el('div',{class:'verdict'},s1).innerHTML=
-    `The static limit misses one fault and still produces ${fmt1(n1.fa_per_month)} false call-outs a month. The full
+    `<b>Each added safeguard removes false alarms; the price is a few days of lead time.</b> The static limit misses one fault and still produces ${fmt1(n1.fa_per_month)} false call-outs a month. The full
      sequential gate detects <b>3 of 3 at ${fmt1(g1.fa_per_month)} false call-outs a month</b> (precision
      ${(g1.precision*100).toFixed(0)}%), at a cost of ${fmt1(f1.warning_days-g1.warning_days)} days of lead time. This
      trade between alarm load and lead time is the central design decision; the threshold slider above moves along it.`;
@@ -364,7 +385,7 @@ function renderStudies(){
   s2.appendChild(barChart(rows2,Math.max(...rows2.map(r=>r.fa))*1.15,30));
   const n2=get('shift','static limit'), g2=get('shift','full sequential gate'), r2=get('shift','sequential gate + rolling recalibration');
   el('div',{class:'verdict sting'},s2).innerHTML=
-    `The static limit degrades to ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}%
+    `<b>Frequent retraining hides slow faults: the cleanest-looking detector is the one that misses the creeping failure.</b> The static limit degrades to ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}%
      precision. The fixed sequential gate holds at ${fmt1(g2.fa_per_month)}. Weekly retraining appears strongest of all,
      ${fmt1(r2.fa_per_month)} false call-outs at ${(r2.precision*100).toFixed(0)}% precision, and it is the only
      architecture that <b>misses the slow fault, detecting ${r2.detected.toFixed(1)} of 3</b>. T22's degradation advanced
@@ -396,7 +417,7 @@ function renderStudies(){
   el('text',{x:X(2),y:Y(.13),class:'axis',text:'Weibull fit: shape '+c.weibull.shape.toFixed(1)+', scale '+c.weibull.scale.toFixed(0)+' y'},svg);
   const ro=c.rule_oldest, rh2=c.rule_hazard;
   el('div',{class:'verdict'},s3).innerHTML=
-    `Averaging only the observed failures gives a fleet lifetime of ${fmt1(c.naive_mean)} years; the censoring-aware
+    `<b>Ignoring the cables you never saw die makes the fleet look shorter-lived than it is, and misdirects the budget.</b> Averaging only the observed failures gives a fleet lifetime of ${fmt1(c.naive_mean)} years; the censoring-aware
      estimate puts the median at <b>${fmt1(c.km_median)} years</b>. The bias carries an operational cost: with the same
      budget of ${c.budget} replacements over ten years, replacing the oldest sections first prevents ${ro.prevented}
      failures and replaces ${ro.wasted} sections that would have survived, while ranking by fitted Weibull hazard (age

@@ -67,9 +67,9 @@ function buildMap(){
   // bus + substation
   el('line',{x1:BUS_X,y1:FEEDER_Y[0]-14,x2:BUS_X,y2:FEEDER_Y[3]+14,stroke:'var(--line2)','stroke-width':5},svg);
   const sub = el('g',{},svg);
-  el('rect',{x:38,y:252,width:76,height:56,rx:4,fill:'var(--panel)',stroke:'var(--steel)','stroke-width':1.4},sub);
-  el('text',{x:76,y:276,'text-anchor':'middle',fill:'var(--steel)','font-family':'var(--mono)','font-size':'11px',text:'60/10 kV'},sub);
-  el('text',{x:76,y:292,'text-anchor':'middle',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',text:'PRIMARY'},sub);
+  el('rect',{x:38,y:252,width:76,height:56,rx:3,fill:'var(--panel2)',stroke:'var(--bright)','stroke-width':1.2},sub);
+  el('text',{x:76,y:276,'text-anchor':'middle',fill:'var(--bright)','font-family':'var(--mono)','font-size':'11px',text:'60/10 kV'},sub);
+  el('text',{x:76,y:292,'text-anchor':'middle',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',text:'primary'},sub);
   el('line',{x1:114,y1:280,x2:BUS_X,y2:280,stroke:'var(--line2)','stroke-width':2},svg);
   // feeders
   FEEDER_Y.forEach((y,f)=>{
@@ -93,7 +93,7 @@ function buildMap(){
   }
   MAP.pins = el('g',{},svg);
   el('text',{x:NODE_X[5]+55,y:548,'text-anchor':'end',fill:'var(--faint)','font-family':'var(--mono)','font-size':'10px',
-    text:'click a transformer · colour = actual asset condition (simulation truth) · pins = tickets raised by the selected detector'},svg);
+    text:'Click a transformer to inspect it. Colour shows the true asset condition; markers show tickets from the selected architecture.'},svg);
 }
 function healthColor(a){
   const d=data(), t=S.day;
@@ -102,7 +102,7 @@ function healthColor(a){
   const m = maxRamp(a); if (m<=0) return 'var(--phosphor)';
   const r = d.ramp[a][t]/m;
   if (r<0.08) return 'var(--phosphor)';
-  return r<0.5 ? 'var(--sodium)' : '#F07A45';
+  return r<0.5 ? 'var(--sodium)' : '#b5541f';
 }
 function paintMap(){
   const d=data(); const tix = ticketsFor(currentArch().key);
@@ -123,15 +123,15 @@ function paintMap(){
       const age = S.day-td, op = age<20 ? 1 : 0.35;
       const px = x-10+((i%5)*5), py = y-21;
       el('polygon',{points:`${px},${py} ${px+7},${py} ${px},${py-9}`,
-        fill: isFault(a)&&td>=(+data().onset[aStr]||1e9)-5 ? 'var(--sodium)' : 'var(--signal)',
+        fill: isFault(a)&&td>=(+data().onset[aStr]||1e9)-5 ? 'var(--amber-bright)' : 'var(--signal)',
         opacity:op},MAP.pins);
     });
   }
   const clock=$('#clock');
   let phase='';
-  if (S.scenario==='shift' && S.day>=REGIME) phase = S.day<REGIME+25 ? ' · <span class="warn">HEAT WAVE</span>' : ' · <span class="warn">EV RAMP</span>';
+  if (S.scenario==='shift' && S.day>=REGIME) phase = S.day<REGIME+25 ? ' · <span class="warn">heat wave</span>' : ' · <span class="warn">EV ramp</span>';
   else if (S.day<TRAIN) phase=' · calibration';
-  clock.innerHTML='DAY '+String(S.day).padStart(3,'0')+phase;
+  clock.innerHTML='Day '+String(S.day).padStart(3,'0')+phase;
 }
 
 /* ---------- sparkline helper ---------- */
@@ -187,7 +187,7 @@ function renderRail(){
   const cut=(arr)=>arr.map((v,t)=>t<=S.day?v:null);
   const sg=sigmaOf(a);
   const l1=el('div',{class:'level'},rail);
-  l1.innerHTML='<div class="lv"><b>L1 · PERCEIVE</b> · hot-spot °C against the model\'s expectation</div>';
+  l1.innerHTML='<div class="lv"><b>Level 1 · Perception</b> · hot-spot temperature against the model\'s expectation</div>';
   l1.appendChild(spark(430,96,[
     {pts:d.pred[a].map((v,t)=>t<=S.day?v:null),band:d.pred[a].map(()=>3*sg),color:'var(--steel)',wd:1,op:.9},
     {pts:cut(d.hotspot[a]),color:'var(--bright)',wd:1.3},
@@ -198,7 +198,7 @@ function renderRail(){
   // L2 comprehend
   const b=BUDGETS[S.bIdx];
   const l2=el('div',{class:'level'},rail);
-  l2.innerHTML='<div class="lv"><b>L2 · COMPREHEND</b> · standardised residual, evidence, doubt</div>';
+  l2.innerHTML='<div class="lv"><b>Level 2 · Comprehension</b> · standardised residual, accumulated evidence, uncertainty</div>';
   const l2hi=Math.max(8,b+2);
   l2.appendChild(spark(430,96,[
     {pts:cut(d.cus[a].map(v=>Math.min(v/3,l2hi))),color:'var(--sodium)',wd:1,op:.85},
@@ -207,14 +207,14 @@ function renderRail(){
   const zt=d.z[a][S.day], ct=d.cus[a][S.day], uh=d.unc_hi[a][S.day];
   const t2=el('div',{class:'note'},l2);
   t2.innerHTML = ct>3*b
-    ? `z = ${zt.toFixed(1)} · <em>evidence far past the ticket line</em> (needs ${(3*b).toFixed(0)}, holds ${ct>999?'999+':ct.toFixed(0)})`
-    : `z = ${zt.toFixed(1)} · accumulated evidence ${ct.toFixed(0)} of ${(3*b).toFixed(0)} needed`+(zt>b?' · <em>over threshold</em>':'');
+    ? `z = ${zt.toFixed(1)} · <em>accumulated evidence well past the ticket threshold</em> (requires ${(3*b).toFixed(0)})`
+    : `z = ${zt.toFixed(1)} · accumulated evidence ${ct.toFixed(0)} of the ${(3*b).toFixed(0)} required`+(zt>b?' · <em>above threshold</em>':'');
   const env=el('div',{class:'envelope'+(uh?' show':'')},l2);
-  env.textContent='OUTSIDE TRAINING ENVELOPE · ensemble disagrees · vote requirement raised';
+  env.textContent='Outside the training envelope: ensemble disagreement is high, so the vote requirement is raised';
 
   // L3 project
   const l3=el('div',{class:'level'},rail);
-  l3.innerHTML='<div class="lv"><b>L3 · PROJECT</b> · where this is heading</div>';
+  l3.innerHTML='<div class="lv"><b>Level 3 · Projection</b> · expected trajectory</div>';
   const wb=RS.cables.weibull;
   const ticketDays=(ticketsFor(currentArch().key)[String(a)]||[]).filter(t=>t<=S.day);
   if (fd!=null && S.day>=fd){
@@ -222,8 +222,8 @@ function renderRail(){
       {hlines:[{v:10,color:'var(--signal)',label:'damage'}],lo:-2,hi:12,marks:[{t:fd,color:'var(--signal)'}]}));
     const t3=el('div',{class:'note'},l3);
     t3.innerHTML = ticketDays.length && ticketDays[0]<fd
-      ? `damage reached on day ${fd}. This detector's first ticket came on day ${ticketDays[0]}, <em>${fd-ticketDays[0]} days early</em>. The projection's job ended there.`
-      : `damage reached on day ${fd}. <em>This detector never ticketed ${id} in time.</em> Switch architectures to see who did.`;
+      ? `damage reached on day ${fd}. This architecture's first ticket came on day ${ticketDays[0]}, <em>${fd-ticketDays[0]} days in advance</em>.`
+      : `damage reached on day ${fd} <em>without a ticket from this architecture</em>. Others ticketed it earlier; compare above.`;
   } else if (ticketDays.length && zt>1){
     // straight-line extrapolation of recent z toward damage, with a doubt fan
     const t0=Math.max(TRAIN,S.day-20);
@@ -241,8 +241,8 @@ function renderRail(){
     ],{hlines:[{v:zdmg,color:'var(--signal)',label:'damage'}],lo:-2,hi:zdmg+2}));
     const t3=el('div',{class:'note'},l3);
     t3.innerHTML = eta && eta<200
-      ? `straight-line projection reaches damage in about <em>${eta} days</em>. The fan is the doubt; a straight line is an assumption, and the page says so.`
-      : 'evidence present but the trend is too flat to date the damage. Keep watching.';
+      ? `a linear extrapolation reaches the damage threshold in roughly <em>${eta} days</em>. The band shows the uncertainty of that assumption.`
+      : 'evidence is present, but the trend is too flat for a dated projection.';
   } else {
     const km=kMean(a), scl=wb.scale*Math.pow(km/0.7,-0.9);
     const pts=[],ages=[];
@@ -251,7 +251,7 @@ function renderRail(){
     l3.appendChild(spark(430,96,[{pts:pts,color:'var(--steel)',wd:1.4}],
       {noRegime:true,noCursor:true,hlines:[{v:.5,color:'var(--faint)',label:'median '+fmt1(med)+' y'}],lo:0,hi:1}));
     const t3=el('div',{class:'note'},l3);
-    t3.innerHTML=`no active evidence on ${id}. Cohort survival for its loading (K̄ ${km.toFixed(2)} pu): median life ${fmt1(med)} years. Censoring-aware, from study 3.`;
+    t3.innerHTML=`no active evidence on ${id}. Cohort survival for its loading (K̄ ${km.toFixed(2)} pu): median life ${fmt1(med)} years, censoring-aware, from Study 3.`;
   }
 }
 
@@ -262,21 +262,21 @@ function renderVerdicts(){
   const mk=(cls,k,n,s)=>{const t=el('div',{class:'tile '+cls},v);
     t.innerHTML=`<div class="k">${k}</div><div class="n">${n}</div><div class="s">${s}</div>`;};
   const det=r.detected, of=r.of;
-  mk(det>=2.9?'good':det>=2?'mid':'bad','faults caught · 5-run mean',
+  mk(det>=2.9?'good':det>=2?'mid':'bad','detection · mean of 5 runs',
     `${det.toFixed(1)}<small> of ${of}</small>`,
-    det>=2.9 ? 'Every developing fault produced a ticket before damage.' :
-    det>=2 ? 'A fault is slipping through. The map shows which one.' :
-    'This architecture leaves faults unseen until damage.');
-  mk(r.warning_days>=15?'good':'mid','median warning before damage',
+    det>=2.9 ? 'Every developing fault was ticketed before damage.' :
+    det>=2 ? 'One fault is being missed; the diagram shows which.' :
+    'Faults reach damage without a ticket.');
+  mk(r.warning_days>=15?'good':'mid','median lead time before damage',
     `${fmt1(r.warning_days)}<small> days</small>`,
-    r.warning_days>=15 ? 'Enough notice to plan an outage instead of suffering one.' :
-    'Late notice: the crew reacts instead of planning.');
+    r.warning_days>=15 ? 'Sufficient notice to plan an intervention.' :
+    'Short notice: intervention becomes reactive.');
   const fa=r.fa_per_month;
-  mk(fa<1?'good':fa<5?'mid':'bad','false call-outs · fleet per month',
+  mk(fa<1?'good':fa<5?'mid':'bad','false alarms · fleet per month',
     fmt1(fa),
-    fa<1 ? `A crew can live with this. Precision ${(r.precision*100).toFixed(0)}%: tickets mean something.` :
-    fa<5 ? `Roughly one wasted drive a week. Precision ${(r.precision*100).toFixed(0)}%.` :
-    `At ${fmt1(fa)} wasted call-outs a month the queue stops being read. Precision ${(r.precision*100).toFixed(0)}%.`);
+    fa<1 ? `Low enough for every ticket to receive attention. Precision ${(r.precision*100).toFixed(0)}%.` :
+    fa<5 ? `Roughly one unnecessary call-out per week. Precision ${(r.precision*100).toFixed(0)}%.` :
+    `At this rate the ticket log loses credibility. Precision ${(r.precision*100).toFixed(0)}%.`);
 }
 
 /* ---------- work orders ---------- */
@@ -307,11 +307,11 @@ function renderOrders(){
     row.innerHTML=`<span class="d">day ${String(r.td).padStart(3,'0')}</span>`+
       `<span class="a">T${String(r.a+1).padStart(2,'0')} · ${FNAMES[Math.floor(r.a/6)]}</span>`+
       `<span class="why">${whyText(arch.key,r.a,r.td)}</span>`+
-      `<span class="h ${r.real?'real':'false'}">${r.real?'hindsight: real fault':'hindsight: healthy'}</span>`;
+      `<span class="h ${r.real?'real':'false'}">${r.real?'true positive':'false alarm'}</span>`;
     if (r.td<=S.day){shown++; if(r.real)realN++;}
   });
-  if (!rows.length) list.innerHTML='<div class="empty-orders">No tickets at this budget. Silence is also a decision: check the map for amber assets it is ignoring.</div>';
-  $('#ordercount').textContent=`${shown} raised by day ${S.day} · ${realN} on genuinely sick assets · full run listed, future rows dimmed`;
+  if (!rows.length) list.innerHTML='<div class="empty-orders">No tickets at this threshold. Note the amber assets on the diagram that remain unreported.</div>';
+  $('#ordercount').textContent=`${shown} tickets by day ${S.day} · ${realN} on genuinely degrading assets · future rows dimmed`;
 }
 
 /* ---------- studies ---------- */
@@ -319,8 +319,8 @@ function barChart(rows, maxFA, maxW){
   const w=980, rh=44, h=rows.length*rh+30;
   const svg=el('svg',{viewBox:`0 0 ${w} ${h}`});
   const lw=250, half=(w-lw-96)/2;
-  el('text',{x:lw+half/2,y:14,'text-anchor':'middle',class:'axis',text:'false call-outs · fleet / month'},svg);
-  el('text',{x:lw+half+56+half/2,y:14,'text-anchor':'middle',class:'axis',text:'median warning · days before damage'},svg);
+  el('text',{x:lw+half/2,y:14,'text-anchor':'middle',class:'axis',text:'false alarms · fleet per month'},svg);
+  el('text',{x:lw+half+56+half/2,y:14,'text-anchor':'middle',class:'axis',text:'median lead time · days before damage'},svg);
   rows.forEach((r,i)=>{
     const y=30+i*rh;
     el('text',{x:lw-10,y:y+17,'text-anchor':'end',class:'barlbl',text:r.label},svg);
@@ -333,50 +333,51 @@ function barChart(rows, maxFA, maxW){
     const missed=r.det!=null && r.det<2.9;
     el('text',{x:lw+half+56+bw2+7,y:y+17,class:'barnum',text:fmt1(r.warn)},svg);
     if (missed) el('text',{x:lw+half+56,y:y+33,class:'axis',fill:'var(--signal)',
-      text:'catches only '+r.det.toFixed(1)+' of 3 faults'},svg);
+      text:'detects only '+r.det.toFixed(1)+' of 3 faults'},svg);
   });
   return svg;
 }
 function renderStudies(){
   const get=(sc,lbl)=>RS[sc][lbl][String(META.default_budget)];
   // study 1
-  const s1=$('#study1'); s1.innerHTML='<h3>Study 1 · What each layer of discipline buys</h3>'+
-    '<p class="q">Quiet season, five seeded runs, threshold z='+META.default_budget+'. Each architecture adds one idea from the centre\'s papers on top of the last.</p>';
-  const order=[['static limit',''],['forecaster residual','learn expected behaviour'],['multi-method vote','agreement before alarm'],
-    ['vote + uncertainty weighting','doubt raises the bar'],['full sequential gate','sustained evidence only']];
+  const s1=$('#study1'); s1.innerHTML='<h3>Study 1 · The contribution of each architectural stage</h3>'+
+    '<p class="q">Stationary conditions, five seeded runs, threshold z='+META.default_budget+'. Each architecture adds one mechanism from the centre\'s publications to the previous one.</p>';
+  const order=[['static limit',''],['forecaster residual','learned expectation model'],['multi-method vote','agreement before alarm'],
+    ['vote + uncertainty weighting','vote raised under uncertainty'],['full sequential gate','sustained evidence required']];
   let rows=order.map(([lbl,note])=>{const r=get('stationary',lbl);
     return {label:lbl,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected};});
   const maxFA=Math.max(...rows.map(r=>r.fa))*1.15;
   s1.appendChild(barChart(rows,maxFA,30));
   const g1=get('stationary','full sequential gate'), n1=get('stationary','static limit'), f1=get('stationary','forecaster residual');
   el('div',{class:'verdict'},s1).innerHTML=
-    `The static limit misses a fault and still wastes ${fmt1(n1.fa_per_month)} call-outs a month. The full gate catches
-     <b>3 of 3 at ${fmt1(g1.fa_per_month)} false call-outs a month</b> (precision ${(g1.precision*100).toFixed(0)}%),
-     and pays for that silence with ${fmt1(f1.warning_days-g1.warning_days)} days of warning. That trade, alarms against
-     lead time, is the whole game; the slider above moves you along it.`;
+    `The static limit misses one fault and still produces ${fmt1(n1.fa_per_month)} false call-outs a month. The full
+     sequential gate detects <b>3 of 3 at ${fmt1(g1.fa_per_month)} false call-outs a month</b> (precision
+     ${(g1.precision*100).toFixed(0)}%), at a cost of ${fmt1(f1.warning_days-g1.warning_days)} days of lead time. This
+     trade between alarm load and lead time is the central design decision; the threshold slider above moves along it.`;
   // study 2
-  const s2=$('#study2'); s2.innerHTML='<h3>Study 2 · The day the world changed</h3>'+
-    '<p class="q">Same fleet, but a heat wave lands on day 180 and EV charging grows from there. The models were trained on a world that no longer exists.</p>';
-  const order2=order.concat([['sequential gate + rolling recalibration','retrain weekly on the trailing month']]);
+  const s2=$('#study2'); s2.innerHTML='<h3>Study 2 · Behaviour under a regime change</h3>'+
+    '<p class="q">The same fleet, with a heat wave arriving on day 180 and electric-vehicle charging growing thereafter. The training data no longer describes the operating conditions.</p>';
+  const order2=order.concat([['sequential gate + rolling recalibration','retrained weekly']]);
   let rows2=order2.map(([lbl,note])=>{const r=get('shift',lbl);
     return {label:lbl===('sequential gate + rolling recalibration')?'gate + weekly retraining':lbl,note,fa:r.fa_per_month,warn:r.warning_days,det:r.detected,
       faColor: lbl.includes('recalibration')?'var(--signal)':undefined};});
   s2.appendChild(barChart(rows2,Math.max(...rows2.map(r=>r.fa))*1.15,30));
   const n2=get('shift','static limit'), g2=get('shift','full sequential gate'), r2=get('shift','sequential gate + rolling recalibration');
   el('div',{class:'verdict sting'},s2).innerHTML=
-    `The static limit floods: ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}% precision.
-     The fixed gate holds at ${fmt1(g2.fa_per_month)}. Weekly retraining looks best of all,
-     ${fmt1(r2.fa_per_month)} false call-outs and ${(r2.precision*100).toFixed(0)}% precision, and it is the only
-     architecture that <b>misses the slow fault: ${r2.detected.toFixed(1)} of 3 caught</b>. T22's decay grew slower than
-     the retraining cadence, so every retrain absorbed a little more of it into "normal", and every redeploy restarted
-     the evidence accumulator. The cleanest queue on the board belongs to the detector that cannot see the slowest fault.
-     In the run drawn on the map above, the fixed gate tickets T22 on day 197, 43 days before damage; the retrained
-     detector never does.`;
+    `The static limit degrades to ${fmt1(n2.fa_per_month)} false call-outs a month at ${(n2.precision*100).toFixed(0)}%
+     precision. The fixed sequential gate holds at ${fmt1(g2.fa_per_month)}. Weekly retraining appears strongest of all,
+     ${fmt1(r2.fa_per_month)} false call-outs at ${(r2.precision*100).toFixed(0)}% precision, and it is the only
+     architecture that <b>misses the slow fault, detecting ${r2.detected.toFixed(1)} of 3</b>. T22's degradation advanced
+     more slowly than the retraining cadence, so each refit absorbed part of it into the estimated normal state, and
+     each redeployment restarted the evidence accumulator. In the run drawn above, the fixed gate tickets T22 on day
+     197, 43 days before damage; the retrained detector never does. The architecture with the cleanest record is the
+     one that cannot see the slowest fault.`;
   // study 3
   const c=RS.cables;
-  const s3=$('#study3'); s3.innerHTML='<h3>Study 3 · When do you replace the cable?</h3>'+
-    `<p class="q">${c.n} MV cable sections observed for 25 years; ${c.n_failures} failed in view, ${c.n_censored} were
-     still alive or preventively replaced (censored). The question is what to do with the ones you never saw die.</p>`;
+  const s3=$('#study3'); s3.innerHTML='<h3>Study 3 · Cable replacement under censored lifetimes</h3>'+
+    `<p class="q">${c.n} MV cable sections observed for 25 years; ${c.n_failures} failures observed, ${c.n_censored}
+     lifetimes censored by the observation window or preventive replacement. The estimate of remaining life depends
+     on how the censored records are treated.</p>`;
   const w=980,h=230,pad=46;
   const svg=el('svg',{viewBox:`0 0 ${w} ${h}`},s3);
   const X=t=>pad+(w-2*pad)*t/60, Y=s=>18+(h-58)*(1-s);
@@ -390,17 +391,17 @@ function renderStudies(){
   for(let t=0;t<=60;t+=1){const s=Math.exp(-Math.pow(t/c.weibull.scale,c.weibull.shape)); wbp+=`${X(t)},${Y(s)} `;}
   el('polyline',{points:wbp,fill:'none',stroke:'var(--steel)','stroke-width':1.4,'stroke-dasharray':'6 4'},svg);
   el('line',{x1:X(c.naive_mean),y1:Y(1),x2:X(c.naive_mean),y2:Y(0),stroke:'var(--signal)','stroke-width':1.6,'stroke-dasharray':'3 3'},svg);
-  el('text',{x:X(c.naive_mean)+6,y:Y(.92),class:'barnum',fill:'var(--signal)',text:'naive: "cables die at '+fmt1(c.naive_mean)+'"'},svg);
+  el('text',{x:X(c.naive_mean)+6,y:Y(.92),class:'barnum',fill:'var(--signal)',text:'uncorrected mean: '+fmt1(c.naive_mean)+' y'},svg);
   el('text',{x:X(c.km_median)+6,y:Y(.5)-6,class:'barnum',fill:'var(--phosphor)',text:'Kaplan-Meier median '+fmt1(c.km_median)+' y'},svg);
-  el('text',{x:X(28)+6,y:Y(.13),class:'axis',text:'Weibull fit: shape '+c.weibull.shape.toFixed(1)+', scale '+c.weibull.scale.toFixed(0)+' y'},svg);
+  el('text',{x:X(2),y:Y(.13),class:'axis',text:'Weibull fit: shape '+c.weibull.shape.toFixed(1)+', scale '+c.weibull.scale.toFixed(0)+' y'},svg);
   const ro=c.rule_oldest, rh2=c.rule_hazard;
   el('div',{class:'verdict'},s3).innerHTML=
-    `Averaging only the cables you watched die says the fleet dies at ${fmt1(c.naive_mean)} years; the censoring-aware
-     curve puts the median at <b>${fmt1(c.km_median)} years</b>. The bias is not academic: with the same budget of
-     ${c.budget} replacements over ten years, replace-the-oldest prevents ${ro.prevented} failures and wastes
-     ${ro.wasted} good cables, while ranking by fitted hazard (age and loading together) prevents
-     <b>${rh2.prevented} failures</b> and wastes ${rh2.wasted}. Same money, ${ro.in_service_failures-rh2.in_service_failures}
-     fewer in-service failures, purely from respecting what the censored data does and does not say.`;
+    `Averaging only the observed failures gives a fleet lifetime of ${fmt1(c.naive_mean)} years; the censoring-aware
+     estimate puts the median at <b>${fmt1(c.km_median)} years</b>. The bias carries an operational cost: with the same
+     budget of ${c.budget} replacements over ten years, replacing the oldest sections first prevents ${ro.prevented}
+     failures and replaces ${ro.wasted} sections that would have survived, while ranking by fitted Weibull hazard (age
+     and loading jointly) prevents <b>${rh2.prevented} failures</b> and replaces ${rh2.wasted} unnecessarily. The same
+     budget, ${ro.in_service_failures-rh2.in_service_failures} fewer in-service failures.`;
 }
 
 /* ---------- provenance ---------- */
@@ -413,8 +414,8 @@ const PROV=[
        ['fd','ensemble tradition','diverse errors cancel; agreement is evidence']]},
  {what:'When the ensemble disagrees, the vote requirement is raised, not silenced',
   src:[['sh','Shaker group 2026','probabilistic overload alarms: epistemic vs aleatoric uncertainty, Sust. Energy Grids & Netw.'],
-       ['fd','Gal & Ghahramani 2016','MC dropout as Bayesian approximation; here: bootstrap-ensemble disagreement stands in']]},
- {what:'A ticket needs sustained evidence, not one bad day: CUSUM before the queue',
+       ['fd','Gal & Ghahramani 2016','MC dropout as Bayesian approximation; bootstrap-ensemble disagreement stands in for it here']]},
+ {what:'A ticket requires sustained evidence: sequential statistics before the queue',
   src:[['sh','Shaker group 2024-2025','alarm significance (IEEE TII 2024), TFT alarm forecasting at a Danish DSO'],
        ['fd','Page 1954; Roberts 1959','CUSUM and EWMA, the sequential-evidence canon']]},
  {what:'The alarm budget is set in crew call-outs per month, and everything else follows from it',
@@ -435,7 +436,7 @@ const PROV=[
        ['fd','Endsley 1995','the three-level model of situation awareness']]},
  {what:'Detection stages are sequential and non-compensable: no later score can buy back a failed gate',
   src:[['bj','Ma, Cong & Jørgensen 2026','deployment feasibility as a layered construct: sequential gates, not compensatory scoring, Energies'],
-       ['fd','the demo\'s reading','a ticket must pass vote, doubt and persistence in order']]},
+       ['fd','this page\'s reading','a ticket must pass vote, uncertainty and persistence in order']]},
  {what:'Retraining cadence is treated as a first-class design variable, with a cost',
   src:[['bj','Jørgensen group 2026','MLOps platform capability mapping for energy forecasting, Information'],
        ['fd','Gama et al. 2014','concept drift: adapt too fast and slow faults become the new normal']]},

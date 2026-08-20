@@ -562,8 +562,9 @@ refresh();
       `sensors show, what the alarm system concludes from them, and where things are heading. `+
       `The three-step structure is itself borrowed from Prof. Jørgensen's control-room work.`},
     {sel:'.controls', k:'The experiment · 5 of 8', html:
-      `These chips are six different alarm-system designs, from a bare temperature limit to the `+
-      `centre's full gated architecture; each adds one safeguard from the publications above. `+
+      `These chips switch between the alarm-system designs under test, from a bare temperature limit `+
+      `to the centre's full gated architecture and its retraining variants; each adds one safeguard `+
+      `from the publications above. `+
       `The slider sets how much evidence a ticket requires. Change anything and every number on `+
       `the page recomputes.`},
     {sel:'#verdicts', k:'The score · 6 of 8', html:

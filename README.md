@@ -1,7 +1,7 @@
 # When does a fault prediction deserve to be believed?
 
 An interactive study of predictive-maintenance detector architectures on a simulated 10 kV
-distribution network, built for the SDU Center for Energy Informatics (PhD application, Theme 2). Every mechanism is taken
+distribution network, built from the published methods of the SDU Center for Energy Informatics. Every mechanism is taken
 from the centre's own publications; the provenance section on the page maps each one to its
 source and to the foundational work it stands on.
 
